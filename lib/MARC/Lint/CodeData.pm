@@ -123,3 +123,5 @@ eijabb@cpan.org
 Copyright (c) 2004.
 
 =cut
+
+__END__

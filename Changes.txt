@@ -1,6 +1,6 @@
 Revision history for Perl extension MARC::Errorchecks.
 
-Version 1.05: Updated Dec. 6. Released Dec. 6, 2004.
+Version 1.05 and 1.06: Updated Dec. 6-7. Released Dec. 6-7, 2004.
 
  -CPAN distribution fix.
 

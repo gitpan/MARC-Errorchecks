@@ -13,7 +13,7 @@ require AutoLoader;
 
 
 
-$VERSION = 1.05;
+$VERSION = 1.06;
 
 =head1 NAME
 
@@ -3150,7 +3150,7 @@ sub validate008 {
 
 =head1 CHANGES/VERSION HISTORY
 
-Version 1.05: Updated Dec. 6. Released Dec. 6, 2004.
+Version 1.05 and 1.06: Updated Dec. 6-7. Released Dec. 6-7, 2004.
 
  -CPAN distribution fix.
 
@@ -3269,3 +3269,5 @@ Copyright (c) 2003-2004
 =cut
 
 1;
+
+__END__
