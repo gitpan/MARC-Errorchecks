@@ -1,5 +1,12 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.04: Updated Nov. 4-Dec. 4, 2004. Released Dec. 5, 2004.
+
+ -Updated validate008() to use MARC::Lint::CodeData.
+ -Removed DATA section, since this is now in MARC::Lint::CodeData.
+ -Updated check_008() to use the new validate008().
+ -Revised bib. refs. check to require 'reference' to be followed by optional 's', optional period, and word boundary (to catch things like 'referenced'.
+
 Version 1.03: Updated Aug. 30-Oct. 16, 2004. Released Oct. 17. First CPAN version.
 
  -Moved subs to MARC::QBIerrorchecks

@@ -1,5 +1,4 @@
-#!/usr/bin/perl -w
-use strict;
+#!perl -w
 
 =head2 JUNK CODE
 
@@ -21,7 +20,16 @@ use strict;
 
 package MARC::BBMARC;
 
-our $VERSION = 1.07;
+use strict;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+
+require Exporter;
+require AutoLoader;
+
+@ISA = qw(Exporter AutoLoader);
+# Items to export into callers namespace by default. @EXPORT = qw();
+
+$VERSION = 1.08;
 
 =head1 NAME
 
@@ -51,11 +59,11 @@ Collection of methods and subroutines, add-ons to MARC::Record, MARC::File, MARC
 
 Subroutines include: 
 
-C<as_formatted2()>, from Field, which pretty-prints fields, separating subfields by tabs, rather than line breaks.
+C<as_formatted2()>, add-on to MARC::Field, which pretty-prints fields, separating subfields by tabs, rather than line breaks.
 
-C<recas_formatted()>, from Record, which is the same as as_formatted, but uses as_formatted2() instead.
+C<recas_formatted()>, add-on to MARC::Record, which is the same as as_formatted, but uses as_formatted2() instead.
 
-C<skipget()>, from File, which returns the next raw marc record from a file.
+C<skipget()>, add-on to  MARC::File, which returns the next raw marc record from a file.
 
 C<updated_record_array()>, which creates an array of control numbers (001) from input file. Used with merge marc script. Call to initialize updated record array variable prior to entering loop. Accepts passed file name, or prompts for one.
 
@@ -84,6 +92,9 @@ Also includes code to wrap around scripts, integrating startstop_time and counti
 
 C<updated_record_hash()>, similar to updated_record_array(), but stores raw USMARC record indexed (keyed) by control number. This has not been fully tested, and will likely eat massive amounts of memory, especially for large files of records.
 
+C<as_array()>, add-on to MARC::Field, breaks field into flat array of subfield code-data pairs. Based on example #U9 of the MARC::Doc::Tutorial. 
+
+
 =head1 EXPORT
 
 None
@@ -110,6 +121,7 @@ Verify each of the codes in the data against current lists and lists of changes.
 
 *MARC::File::skipget = *MARC::BBMARC::skipget;
 *MARC::Field::as_formatted2 = *MARC::BBMARC::as_formatted2;
+*MARC::Field::as_array = *MARC::BBMARC::as_array;
 *MARC::Record::as_formatted2 = *MARC::BBMARC::recas_formatted;
 
 =head2 as_formatted2()
@@ -126,7 +138,7 @@ sub as_formatted2() {
 	my $self = shift;
 	### @lines will contain tag number, indicators,
 	### and subfield data.
-	my @lines;
+	my @lines = ();
 
 	if ( $self->is_control_field() ) {
 		push( @lines, sprintf( "%03s     %s", $self->{_tag}, $self->{_data} ) );
@@ -212,6 +224,7 @@ Returns a raw MARC record string or undef.
 =cut
 
 sub skipget {
+
 	use MARC::File;
 	my $self = shift;
 	$self->{recnum}++;
@@ -364,6 +377,17 @@ The first element in each is 'empty', so numbering
 matches indicator 1 and indicator 2.
 Indicator types: 'digit', 'blank', or 'any'.
 
+=head2 Get indicator additional info
+
+ ##################################
+ ##################################
+ ### Synopsis/Calling procedure ###
+ ##################################
+
+ my ($gotindicators, $gotindicatortypes) = getindicators();
+ print join ("\n", "indarray", @$gotindicators, "\n");
+ print join ("\n", "indtypes", @$gotindicatortypes, "\n");
+
 =cut
 
 ######################
@@ -413,19 +437,6 @@ sub getindicators {
 	return (\@indicators, \@indicatortypes);
 
 } #sub getindicators
-
-=head2 Get indicator additional info
-
- ##################################
- ##################################
- ### Synopsis/Calling procedure ###
- ##################################
-
- my ($gotindicators, $gotindicatortypes) = getindicators();
- print join ("\n", "indarray", @$gotindicators, "\n");
- print join ("\n", "indtypes", @$gotindicatortypes, "\n");
-
-=cut
 
 
 =head2 readcodedata()
@@ -677,6 +688,48 @@ $recordno++;
 ##########################
 ##########################
 
+=head2 as_array
+
+Add-on method to MARC::Field. Breaks MARC::Field into a flat array of subfield code and subfield data pairs.
+Based on example 9 of the MARC::Doc::Tutorial.
+
+head2 Example (as_array)
+
+my $field043 = MARC::Field->new('043', '', '', 'a' => 'n-us---', 'a' => 'e-uk---', 'a' => 'a-th---' );
+
+my $field043_arrayref = $field043->as_array(); 
+my @field043_array = @$field043arrayref;
+
+# @field043_array is: ('a', 'n-us---', 'a', 'e-uk---', 'a', 'a-th---')
+
+=head2 TO DO (as_array)
+
+Add ability to optionally pass in regex to find in subfields, returning positions of the matches (in a second array ref).
+
+=cut
+
+sub as_array {
+
+	use MARC::Field;
+	my $self = shift;
+
+	my @field_as_array = ();
+	my @subfields = $self->subfields();
+
+	# break subfields into code-data array (so the entire field is in one array)
+	while (my $subfield = pop(@subfields)) {
+		my ($code, $data) = @$subfield;
+		unshift (@field_as_array, $code, $data);
+	} # while
+
+	return (\@field_as_array)
+
+} # as_array
+
+##########################
+##########################
+##########################
+
 ##########################
 ##########################
 ##########################
@@ -766,7 +819,12 @@ MARC pages at the Library of Congress (http://www.loc.gov/marc)
 
 =head1 CHANGES/HISTORY
 
-Version 1.07: Updated Aug. 30-Oct. 16, 2004. Released Oct. 16, 2004.
+Version 1.08: Updated Oct 31, 2004. Released Dec. 5, 2004.
+
+ -New method, as_array, an add-on to MARC::Field which breaks down a MARC::Field object into a flat array, returns a ref to that array.
+ -Misc. cleanup.
+
+Version 1.07: Updated Aug. 30-Oct. 16, 2004. Released Oct. 17, 2004.
 
  -Moved subroutine getcontrolstocknos() to MARC::QBIerrorchecks
  -Moved validate007() to Lintadditions.pm

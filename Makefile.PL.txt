@@ -9,7 +9,7 @@ If this file fails to install the module, please install manually:
 
 1. Install MARC::Record (version 1.38 or greater).
 2. Find where the MARC::Record module resides on your system.
-3. Place this module in the MARC directory next to the Record.pm file.
+3. Place the files and directories from the /MARC/ directory of this module distribution in the MARC directory next to the Record.pm file.
 4. Place the files in the bin/ directory whereever such files normally go on your system.
 
 Thank you,

@@ -1,6 +1,6 @@
 =head1 NAME
 
-MARC::Errorchecks -- Cross-field error checks for MARC records according to MARC21, AACR2R, and LCRI rules.
+MARC::Errorchecks
 
 =head1 DESCRIPTION
 
@@ -15,33 +15,6 @@ Each subroutine should generally be passed a MARC::Record object.
 Returned warnings/errors are generated as follows:
 push @warningstoreturn, join '', ($field->tag(), ": [ERROR TEXT]\t");
 return \@warningstoreturn;
-
-=head2 DISTRIBUTION CONTENTS
-
-In lib/ directory:
-MARC::BBMARC (v. 1.07)-- Collection of misc. subs used by the scripts in the bin/ directory.
-This may be added as a separate module distribution in the future, possibly under a different name.
-
-In the bin/ directory:
-
- -bin/Lintallchecks.pl -- Uses MARC::Lint, MARC::Lintadditions, and MARC::Errorchecks 
-to look for MARC21, AACR2/LCRI coding problems in a file of MARC21 records.
-
- MARC code list cleanup scripts (for generating the DATA section of MARC::Errorchecks and MARC::Lintadditions):
- (Require ASCII version of code lists, L<http://www.loc.gov/marc/>)
- -bin/countrycodelistclean.pl--L<http://www.loc.gov/marc/countries/cou_ascii.html>
- -bin/gaccleanupscript.pl--L<http://www.loc.gov/marc/geoareas/gacascii.html>
- -bin/languagecodelistclean.pl--L<http://www.loc.gov/marc/languages/langascii.html>
-
- Other possibly useful scripts:
- (All require MARC::BBMARC, available from L<http://home.inwave.com/eija/bryanmodules>)
- 
- -bin/003cleanupscript.pl -- Compares 001 and 003 fields, cleans mismatched 003s and outputs to MARC-format file and reports unmatched 003s.
- -bin/007cleanupscript.pl -- Check validity of each 007 value (uses MARC::Lintadditions).
-Reports any records needing manual correcting (outputs these to file).
-Cleans fields with valid values, but that are too long, and outputs these to separate file.
- -bin/010cleanupscript.pl -- Fixes spacing problems in 010 subfield a.
- -bin/cleantrailingspaces.pl -- Looks for extra spaces at the end of fields greater than 010 (ignores 016), removes unnecessary spaces, outputs records that have been cleaned.
 
 =head1 SYNOPSIS
 
@@ -83,5 +56,37 @@ Cleans fields with valid values, but that are too long, and outputs these to sep
   }
 
  } #while
+
+=head1 SEE ALSO
+
+MARC::Record -- Required for this module to work.
+
+MARC::Lint -- In the MARC::Record distribution and basis for this module.
+
+MARC::Lintadditons -- Extension of MARC::Lint for checks involving individual tags.
+(vs. cross-field checking covered in this module).
+Available at http://home.inwave.com/eija (and may be merged into MARC::Lint).
+
+MARC pages at the Library of Congress (http://www.loc.gov/marc)
+
+Anglo-American Cataloging Rules, 2nd ed., 2002 revision, plus updates.
+
+Library of Congress Rule Interpretations to AACR2R.
+
+MARC Report (http://www.marcofquality.com) -- More full-featured commercial program for validating MARC records.
+
+=head1 LICENSE
+
+This code may be distributed under the same terms as Perl itself. 
+
+Please note that this module is not a product of or supported by the 
+employers of the various contributors to the code.
+
+=head1 AUTHOR
+
+Bryan Baldus
+eijabb@cpan.org
+
+Copyright (c) 2003-2004
 
 =cut

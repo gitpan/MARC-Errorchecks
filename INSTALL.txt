@@ -15,6 +15,7 @@ If the above fails to install the module, please install manually:
 1. Install MARC::Record (version 1.38 or greater).
 2. Find where the MARC::Record module resides on your system.
 3. Place the modules in lib/MARC/ in the MARC directory next to the Record.pm file.
+(with new Lint directory for MARC::Lint::CodeData).
 4. Place the files in the bin/ directory whereever such files normally go on your system.
 5. I welcome any suggestions for fixing the Makefile.PL to work properly.
 
@@ -26,3 +27,4 @@ http://home.inwave.com/eija
 DEPENDENCIES
 
 MARC::Record version 1.38 or better.
+MARC::Lint::CodeData (included in this distribution).

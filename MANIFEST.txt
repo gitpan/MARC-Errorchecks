@@ -10,6 +10,7 @@ Changes
 INSTALL.txt
 lib/MARC/BBMARC.pm
 lib/MARC/Errorchecks.pm
+lib/MARC/Lint/CodeData.pm
 Makefile.PL
 MANIFEST
 README.txt

@@ -6,7 +6,7 @@ Country Code List Cleanup
 
 =head2 DESCRIPTION
 
-Reads MARC code list for countries (plain text)--L<http://www.loc.gov/marc/countries/cou_ascii.html>.
+Reads MARC code list for countries (plain text).
 Writes only codes and country (or other place) name, separated by tab.
 For obsolete codes, adds these at end of output file (keeping the hyphen).
 
@@ -153,7 +153,7 @@ employers of the various contributors to the code.
 =head1 AUTHOR
 
 Bryan Baldus
-eija [at] inwave [dot] com
+eijabb@cpan.org
 
 Copyright (c) 2003-2004
 

@@ -11,7 +11,9 @@ require AutoLoader;
 @ISA = qw(Exporter AutoLoader);
 # Items to export into callers namespace by default. @EXPORT = qw();
 
-$VERSION = 1.03;
+
+
+$VERSION = 1.04;
 
 =head1 NAME
 
@@ -387,9 +389,10 @@ Validates each byte of the 008, based on MARC::Errorchecks::validate008($field00
 =head2 TO DO (check_008)
 
 Improve validate008 subroutine (see that sub for more information):
- -Revise error message reporting.
  -Break byte 18-34 checking into separate sub so it can be used for 006 validation as well.
  -Optimize efficiency.
+
+Revised 12-2-2004 to use new validate008() sub.
  
 =cut
 
@@ -408,13 +411,7 @@ sub check_008 {
 	my $field008 = $record->field('008')->as_string();
 
 	#call validate008 subroutine from Errorchecks.pm (this package)
-	my ($validatedhashref, $cleaned008ref, $badcharsref) = MARC::Errorchecks::validate008($field008, $mattype, $biblvl);
-
-	my $badchars = $$badcharsref;
-
-	if ($badchars) {
-		push @warningstoreturn, ("008: $badchars");
-	}
+	@warningstoreturn = @{MARC::Errorchecks::validate008($field008, $mattype, $biblvl)};
 
 	return \@warningstoreturn;
 
@@ -1321,10 +1318,10 @@ sub check_bk008_vs_bibrefandindex {
 	#set $hasbibrefs to 1 if 'b' appears in 008 byte 24-27
 	$hasbibrefs = 1 if ($bkcontents =~ /b/);
 
-	#get 504s with 'bibliographical references'
-	my @bibrefsin504 = grep {$_ =~ /bibliographical reference/} @fields504;
+	#get 504s with 'bibliographical references' #modified 11-4-04 to add 's?\.?\b'
+	my @bibrefsin504 = grep {$_ =~ /bibliographical references?\.?\b/} @fields504;
 	#get 500s with 'bibliographical references'
-	my @bibrefsin500 = grep {$_ =~ /bibliographical reference/} @fields500;
+	my @bibrefsin500 = grep {$_ =~ /bibliographical references?\.?\b/} @fields500;
 ###### Temporary/uncertain method of checking for bibliography as form of item
 	my @bib6xx = grep {$_ =~ /bibliography|bibliographies/i} @fields6xx;
 
@@ -2336,76 +2333,6 @@ sub  {
 #########################################
 #########################################
 
-=head2 NAME
-
-readcodedata() -- Read Country, Geographic Area Code, Language Data
-
-=head2 DESCRIPTION
-
-Subroutine for reading data to build an array of country codes, geographic area codes, and language codes, valid and obsolete, for use in validate008 (in MARC::Errorchecks) and 043 validation (in MARC::Lintadditions).
-
-=head2 SYNOPSIS
-
- my @dataarray = MARC::Errorchecks::readcodedata();
-## or 
- #MARC::Errorchecks::readcodedata();
- #my @countrycodes = split "\t", $MARC::Errorchecks::dataarray[1];
- 
- my @countrycodes = split "\t", $dataarray[1];
- my @oldcountrycodes = split "\t", $dataarray[3];
- my @geogareacodes = split "\t", $dataarray[5];
- my @oldgeogareacodes = split "\t", $dataarray[7];
- my @languagecodes = split "\t", $dataarray[9];
- my @oldlanguagecodes = split "\t", $dataarray[11];
-
-=head2 DATA Outline
-
- Data lines:
- 0: __CountryCodes__
- 1: countrycodes (tab-delimited)
- 2: __ObsoleteCountry__
- 3: oldcountrycodes (tab-delimited)
- 4: __GeogAreaCodes__
- 5: gacodes (tab-delimited)
- 6: __ObsoleteGeogAreaCodes__
- 7: oldgacodes (tab-delimited)
- 8: __LanguageCodes__
- 9: languagecodes (tab-delimited)
- 10: __LanguageCodes__
- 11: oldlanguagecodes (tab-delimited)
-
-=head2 TO DO (readcodedata())
-
- Evaluate need for GeogAreaCodes in this module.
- These may not be needed, since 043 is validated in MARC::Lintadditions.
-
- Move this and the codes to separate data file?
- 
-=cut
-
-
-#declare global @dataarray
-
-our @dataarray = ();
-
-sub readcodedata {
-
-	# return @dataarray if it has been filled
-	if (@dataarray) {return @dataarray;}
-	# otherwise fill @dataarray
-	else {
-	#get start position so the next call can read the same data again
-		my $startdataposition = tell DATA;
-		while (my $dataline = <DATA>) {
-			chomp $dataline;
-			push @dataarray, $dataline;
-		}
-	#set the pointer back at the starting position
-		seek DATA, $startdataposition, 0;
-		return @dataarray;
-	}
-} # readcodedata
-
 ##########################
 ##########################
 ##########################
@@ -2480,18 +2407,26 @@ sub parse008date {
 ##########################
 ##########################
 
+=head2 validate008 reworked
+
+Reworking of the validate008 sub.
+Revised to work more like other Errorchecks and Lintadditions checks.
+Returns array ref of errors.
+Previous version returned hash ref of 008 byte key-value pairs,
+array ref of cleaned bytes, and scalar ref of errors.
+New version returns only an array ref of errors.
+
 =head2 validate008 ($field008, $mattype, $biblvl)
 
 Checks the validity of 008 bytes.
+Used by the check_008 method for 008 validation.
 
 =head2 DESCRIPTION
 
 Checks the validity of 008 bytes.
 Depends upon 008 being based upon LDR/06,
 so continuing resources/serials records may not work.
-Check LDR/07 for 's' for serials
-
-Returns hash with named 008 positions, cleaned 008 array, and $hasbadchars string, with tab-separated errors.
+Checks LDR/07 for 's' for serials before checking material specific bytes.
 
 =head2 OTHER INFO
 
@@ -2504,6 +2439,7 @@ Steps in validation code for format specific positions:
  3. add valid characters as individual positions of cleaned array
  4. add any error to scalar containing tabbed errors
 
+
 =head2 Synopsis
 
  use MARC::Record;
@@ -2514,18 +2450,9 @@ Steps in validation code for format specific positions:
  #my $biblvl = substr($leader, 7, 1);
  #my $field008 = $record->field('008')->as_string();
  my $field008 = '000101s20002000nyu                 eng d';
- my ($validatedhashref, $cleaned008ref, $badcharsref) =  MARC::Errorchecks::validate008($field008, $mattype, $biblvl);
- my %validatedhash = %$validatedhashref;
- my @cleaned008arr = @$cleaned008ref;
- my $badchars = $$badcharsref;
- foreach my $key (sort keys %validatedhash) {
- print "$key => $validatedhash{$key}\n";
- }
- print join ('', @cleaned008arr, "\n");
- print "$badchars\n";
+ my @warningsfrom008 =  @{MARC::Errorchecks::validate008($field008, $mattype, $biblvl)};
 
- print $field008hash{pubctry};
-
+print join "\t", @warningsfrom008, "\n";
 
 =head2 TO DO (validate008)
 
@@ -2533,33 +2460,38 @@ Steps in validation code for format specific positions:
  Add error checking for less than 40 char string.
  --Partially done--Less than 40 characters leads to error.
  Verify datetypes that allow multiple dates.
- Deal with problem of Serials/Continuing resources--
- currently seriality is checked late in process, 
- so any records with serial 008 might report unnecessary errors.
- Determine whether it might be better to add invalid warnings to array rather than scalar string.
- Reconsider what the subroutine returns.
+
+ Verify continuing resource checking (not thoroughly tested).
 
  Separate byte 18-34 checking so the same code can be used for 006 byte checking.
+
+=head2 SKIP CODE for SERIALS
+
+### This is not here for any particular reason, 
+### I just wanted to save it for future use if I needed it.
+	#stop checking if record is not coded 'm', monograph
+	unless ($biblvl eq 'm') {
+		push @warningstoreturn, ("LDR: Record coded $biblvl, not monograph. Further parsing of 008 will not be done for this record.");
+		return (\@warningstoreturn);
+	} #unless bib level is 'm'
+
+
+
 
 =head2 TEST CODE
 
  #test code
- sub validate008;
+ use MARC::Errorchecks;
+ use MARC::Record;
  my $leader = '00050nam';
  my $field008 = '000101s20002000nyu                 eng d';
  my $mattype = substr($leader, 6, 1); 
  my $biblvl = substr($leader, 7, 1);
 
  print "$field008\n";
- my ($validatedhashref, $cleaned008ref, $badcharsref) = validate008($field008, $mattype, $biblvl);
- my %validatedhash = %$validatedhashref;
- my @cleaned008arr = @$cleaned008ref;
- my $badchars = $$badcharsref;
- foreach my $key (sort keys %validatedhash) {
- print "$key => $validatedhash{$key}\n";
- }
- print join ('', @cleaned008arr, "\n");
- print "$badchars\n";
+ my @warningsfrom008 =  @{validate008($field008, $mattype, $biblvl)};
+
+print join "\t", @warningsfrom008, "\n";
 
 =cut
 
@@ -2572,25 +2504,24 @@ Steps in validation code for format specific positions:
 
 sub validate008 {
 
-	# declare error variable
-	my $hasbadchars = '';
-	# declare array to hold parsed and cleaned bytes
-	#may be unnecessary?
-	my @cleaned008;
-
 	#populate subroutine $field008 variable with passed string
 	my $field008 = shift;
 	#populate subroutine $mattype and $biblvl with passed strings
 	my $mattype = shift;
 	my $biblvl = shift;
 
-	#setup country and language code validation array
-	# (reads DATA from end of Errorchecks (or current) module)
-	readcodedata();
+	#declaration of return array
+	my @warningstoreturn = ();
 
-	#make sure passed 008 field is at least 40 bytes
-	##(this is probably only necessary for when using the subroutine outside of MARC records)
-	if (length($field008) < 40) {$hasbadchars = "008 string is less than 40 bytes\t";}
+	#setup country and language code validation hashes
+	#from the MARC::Lint::CodeData module
+	use MARC::Lint::CodeData qw(%LanguageCodes %ObsoleteLanguageCodes %CountryCodes %ObsoleteCountryCodes);
+
+	#make sure passed 008 field is exactly 40 bytes
+	if (length($field008) != 40) {push @warningstoreturn, ("008: Not 40 bytes. Bytes not validated ($field008).");}
+
+	#return if 008 field of 40 bytes was not found
+	return (\@warningstoreturn) if (@warningstoreturn);
 
 	#get the values of the all-format positions
 	my %field008hash = (
@@ -2616,15 +2547,18 @@ sub validate008 {
 	my $yearentered = shift @parsed008date;
 	my $monthentered = shift @parsed008date;
 	my $dayentered = shift @parsed008date;
-	$hasbadchars = join "\t", @parsed008date ;
+	my $dateerrors = join "\t", @parsed008date;
 
-	if (($field008hash{dateentered} =~ /^\d{6}$/) && ($hasbadchars !~ /entered/))
-		{@cleaned008[0..5] = split ('', $field008hash{dateentered});} else {$hasbadchars .= "dateentered has bad chars\t"}; 
+	#unless date entered is only 6 digits and no errors were found, report the errors
+	unless (($field008hash{dateentered} =~ /^\d{6}$/) && $dateerrors !~ /entered/) {
+		push @warningstoreturn, ("008: Bytes 0-5, Date entered has bad characters. $dateerrors.");
+	} 
 
-	# Type of date/Publication status (byte[6])
+	#Type of date/Publication status (byte[6])
 	#my $datetype = substr($field008,6,1);
-	if ($field008hash{datetype} =~ /^[bcdeikmnpqrstu|]$/)
-		{$cleaned008[6] = $field008hash{datetype};} else {$hasbadchars .= "datetype has bad chars\t"}; 
+	unless ($field008hash{datetype} =~ /^[bcdeikmnpqrstu|]$/) {
+		push @warningstoreturn, ("008: Byte 6, Date type has bad characters.");
+	} 
 
 ###### Remove the following ###########
 ### Remnant of writing of code ####
@@ -2647,85 +2581,169 @@ sub validate008 {
 #########################################
 
 
-	# Date 1 (byte[7]-[10])
-	if ($field008hash{date1} =~ /^[u\d|]{4}$/)
-		{@cleaned008[7..10] = split ('', $field008hash{date1});}
-	elsif (($field008hash{date1} =~ /^\s{4}$/) && ($field008hash{datetype} =~ /^b$/)) {@cleaned008[7..10] = split ('', '    ');}
-	else {$hasbadchars .= "date1 has bad chars\t"}; 
+	#Date 1 (byte[7]-[10])
+	unless (($field008hash{date1} =~ /^[u\d|]{4}$/) || (($field008hash{date1} =~ /^\s{4}$/) && ($field008hash{datetype} =~ /^b$/)))
+		{push @warningstoreturn, ("008: Bytes 7-10, Date1 has bad characters.")}; 
 
 	###on date2, verify datetypes that are allowed to have only one date
 	# Date 2 (byte[11]-[14])
 	#check datetype for single date
 	if ($field008hash{datetype} =~ /^[bqs]$/) {
 		#if single, need to have four spaces as date2
-		if ($field008hash{date2} =~ /^\s{4}$/) {{@cleaned008[11..14] = split ('', '    ');} }
-		else {$hasbadchars .= "date2 has bad chars\t"}
-	}
-	elsif ($field008hash{date2} =~ /^[u\d|]{4}$/)
-		{@cleaned008[11..14] = split ('', $field008hash{date2});}
+		unless ($field008hash{date2} =~ /^\s{4}$/) {
+			push @warningstoreturn, ("008: Bytes 11-14 Date2, has bad characters.")
+		} #unless date2 has 4 blanks for types b, q, s
+	} #if date type is b, q, or s
 	#may need elsif for 4 blank spaces with other datetypes or other elsifs for different datetypes (e.g. detailed date, 'e')
-	else {$hasbadchars .= "date2 has bad chars\t"}
+	elsif ($field008hash{date2} !~ /^[u\d|]{4}$/) {
+		push @warningstoreturn, ("008: Bytes 11-14, Date2 has bad characters.")}
 
 	# Place of publication, production, or execution (byte[15]-[17])
 	#my $pubctry = substr($field008,15,3);
 	###Get codes from MARC Country Codes list
-	my @countrycodes = split "\t", $dataarray[1];
-	my @oldcountrycodes = split "\t", $dataarray[3];
 
 	#see if country code matches valid code
-	my @validctrycodegrep = grep {$_ eq $field008hash{pubctry}} @countrycodes;
-	#look for invalid code match if valid code was not matched
-	my @invalidctrycodegrep;
-	unless (@validctrycodegrep) {@invalidctrycodegrep = grep {$_ eq $field008hash{pubctry}} @oldcountrycodes;}
+	my $validctrycode = 1 if $CountryCodes{$field008hash{pubctry}};
+	#look for obsolete code match if valid code was not matched
+	my $obsoletectrycode = 1 if $ObsoleteCountryCodes{$field008hash{pubctry}};
 
-	if (@validctrycodegrep)
-		{@cleaned008[15..17] = split ('', $validctrycodegrep[0]);
-	} 
-	#code did not match valid code, so see if it may have been valid before
-	elsif (@invalidctrycodegrep) {$hasbadchars .= $field008hash{pubctry}." may be obsolete\t";}
-	else {$hasbadchars .= "pubctry has bad chars\t"}; 
-
+	unless ($validctrycode) {
+		#code did not match valid code, so see if it may have been valid before
+		if ($obsoletectrycode) {
+			push @warningstoreturn, ("008: Bytes 15-17, Country of Publication ($field008hash{pubctry}) may be obsolete.");
+		}
+		else {
+			push @warningstoreturn, ("008: Bytes 15-17, Country of Publication ($field008hash{pubctry}) is not valid.")
+		}
+	} #unless valid country code was found
+	
 #######################################################
 #### byte[18]-[34] are format specific (see below) ####
 ######################################################
 
 	# Language (byte[35]-[37])
-	###Get codes from MARC Code List for Languages (cleaned version is in DATA at end of this module).
-	##############################################
-	###### Test check against codelist data ######
-	##############################################
 
-	my @languagecodes = split "\t", $dataarray[9];
-	#add three blanks to valid @languagecodes
-	push @languagecodes, '   ';
-	my @oldlanguagecodes = split "\t", $dataarray[11];
-
-	#see if language code matches valid code
-	my @validlangcodegrep = grep {$_ eq $field008hash{langcode}} @languagecodes;
+#%LanguageCodes %ObsoleteLanguageCodes
+	my $validlang = 1 if ($LanguageCodes{$field008hash{langcode}});
 	#look for invalid code match if valid code was not matched
-	my @invalidlangcodegrep;
-	unless (@validlangcodegrep) {@invalidlangcodegrep = grep {$_ eq $field008hash{langcode}} @oldlanguagecodes;}
+	my $obsoletelang = 1 if ($ObsoleteLanguageCodes{$field008hash{langcode}});
 
-	if (@validlangcodegrep)
-	{@cleaned008[35..37] = split ('', $validlangcodegrep[0]);
-	} 
-	#code did not match valid code, so see if it may have been valid before
-	elsif (@invalidlangcodegrep) {$hasbadchars .= $field008hash{langcode}." may be obsolete\t";}
-	else {$hasbadchars .= "langcode has bad chars\t"}; 
+	# skip valid subfields
+	unless ($validlang) {
+		#report invalid matches as possible obsolete codes
+		if ($obsoletelang) {
+			push @warningstoreturn, ("008: Bytes 35-37, Language ($field008hash{langcode}) may be obsolete.");
+		} #if obsolete
+		else {
+			push @warningstoreturn, ("008: Bytes 35-37, Language ($field008hash{langcode}) not valid.");
+		} #else code not found 
+	} # unless found valid code
+
 
 	##################################################
 
 	# Modified record (byte[38])
 	#my $modrec = substr($field008,38,1);
-	if ($field008hash{modrec} =~ /^[dorsx|\s]$/)
-		{$cleaned008[38] = $field008hash{modrec};} 
-	else {$hasbadchars .= "modrec has bad chars\t"}; 
+	unless ($field008hash{modrec} =~ /^[dorsx|\s]$/) {
+		push @warningstoreturn, ("008: Byte 38, Modified record has bad characters.");
+	} #unless modrec has valid characters
 
 	# Cataloging source (byte[39])
 	#my $catsource = substr($field008,39,1);
-	if ($field008hash{catsource} =~ /^[cdu|\s]$/)
-		{$cleaned008[39] = $field008hash{catsource};} 
-	else {$hasbadchars .= "catsource has bad chars\t"}; 
+	unless ($field008hash{catsource} =~ /^[cdu|\s]$/) {
+		push @warningstoreturn, ("008: Byte 39, Cataloging source has bad characters.");
+	} #unless Cataloging source is valid
+
+	########################################
+	########################################
+	########################################
+	##  Continuing Resources bytes 18-34  ##
+	########################################
+	########################################
+	########################################
+
+	### Check continuing resources (serials) ###
+	if ($biblvl =~ /^[s]$/) {
+
+		# Frequency (byte[18])
+		$field008hash{frequency} = substr($field008,18,1);
+		unless ($field008hash{frequency} =~ /^[abcdefghijkmqstuwz|\s]$/) {
+			push @warningstoreturn, ("008: Byte 18, Continuing resources-Frequency has bad characters.");
+		} #Continuing resources 18
+
+		# Regularity (byte[19])
+		$field008hash{regularity} = substr($field008,19,1);
+		unless ($field008hash{regularity} =~ /^[nrux|]$/) {
+			push @warningstoreturn, ("008: Byte 19, Continuing resources-Regularity has bad characters.");
+		} #Continuing resources 19
+
+		#ISSN center (byte[20])
+		$field008hash{issncenter} = substr($field008,20,1);
+		unless ($field008hash{issncenter} =~ /^[0124z|\s]$/) {
+			push @warningstoreturn, ("008: Byte 20, Continuing resources-ISSN center has bad characters.")
+		} #Continuing resources 20
+
+		#Type of continuing resource (byte[21])
+		$field008hash{typeofcontres} = substr($field008,21,1);
+		unless ($field008hash{typeofcontres} =~ /^[dlmnpw|\s]$/) {
+			push @warningstoreturn, ("008: Byte 21, Continuing resources-Type of continuing resource has bad characters.");
+		} #Continuing resources 21
+
+		#Form of original item (byte[22])
+		$field008hash{formoforig} = substr($field008,22,1);
+		unless ($field008hash{formoforig} =~ /^[abcdefs\s]$/) {
+			push @warningstoreturn, ("008: Byte 22, Continuing resources-Form of original has bad characters.");
+		} #Continuing resources 22
+
+		#Form of item (byte[23])
+		$field008hash{formofitem} = substr($field008,23,1);
+		unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
+			push @warningstoreturn, ("008: Byte 23, Continuing resources-Form of item has bad characters.");
+		} #Continuing resources 23
+
+		#Nature of entire work (byte[24])
+		$field008hash{natureofwk} = substr($field008,24,1);
+		unless ($field008hash{natureofwk} =~ /^[abcdefghiklmnopqrstuvwz|\s]$/) {
+			push @warningstoreturn, ("008: Byte 24, Continuing resources-Nature of work has bad characters.");
+		} #Continuing resources 24
+
+		#Nature of contents (byte[25]-[27])
+		$field008hash{contrescontents} = substr($field008,25,3);
+		unless ($field008hash{contrescontents} =~ /^[abcdefghiklmnopqrstuvwz|\s]{3}$/) {
+			push @warningstoreturn, ("008: Bytes 25-27, Continuing resources-Contents has bad characters.");
+		} #Continuing resources 25-27
+
+		#Government publication (byte[28])
+		$field008hash{govtpub} = substr($field008,28,1);
+		unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+			push @warningstoreturn, ("008: Byte 28, Continuing resources-Govt publication has bad characters.");
+		} #Continuing resources 28
+
+		#Conference publication (byte[29])
+		$field008hash{confpub} = substr($field008,29,1);
+		unless ($field008hash{confpub} =~ /^[01|]$/) {
+			push @warningstoreturn, ("008: Byte 29, Continuing resources-Conference publication has bad characters.");
+		} #Continuing resources 29
+
+		#Undefined (byte[30]-[32])
+		$field008hash{contresundef30to32} = substr($field008,30,3);
+		unless ($field008hash{contresundef30to32} =~ /^[|\s]{3}$/) {
+			push @warningstoreturn, ("008: Bytes 30-32, Continuing resources-Undef30to32 has bad characters.");
+		} #Continuing resources 30-32 
+
+		#Original alphabet or script of title (byte[33])
+		$field008hash{origalphabet} = substr($field008,33,1);
+		unless ($field008hash{origalphabet} =~ /^[abcdefghijkluz|\s]$/) {
+			push @warningstoreturn, ("008: Byte 33, Continuing resources-Original alphabet has bad characters.");
+		} #Continuing resources 33
+
+		#Entry convention (byte[34])
+		$field008hash{entryconvention} = substr($field008,34,1);
+		unless ($field008hash{entryconvention} =~ /^[012|]$/) {
+			push @warningstoreturn, ("008: Byte 34, Continuing resources-Entry convention has bad characters.");
+		} #Continuing resources 34
+
+	} # Continuing Resources
 
 	########################################
 	########################################
@@ -2736,73 +2754,73 @@ sub validate008 {
 	########################################
 
 
-	if ($mattype =~ /^[at]$/) {
+	elsif ($mattype =~ /^[at]$/) {
 
 		# Illustrations (byte [18]-[21])
 		$field008hash{illustrations} = substr($field008,18,4);
-		if ($field008hash{illustrations} =~ /^[abcdefghijklmop|\s]{4}$/)
-			{@cleaned008[18..21] = split ('', $field008hash{illustrations});} 
-		else {$hasbadchars .= "booksillustrations has bad chars\t"}; 
+		unless ($field008hash{illustrations} =~ /^[abcdefghijklmop|\s]{4}$/) {
+			push @warningstoreturn, ("008: Bytes 18-21, Books-Illustrations has bad characters.");
+		} #Books-18-21
 
 		# Target audience (byte 22)
 		$field008hash{audience} = substr($field008,22,1);
-		if ($field008hash{audience} =~ /^[abcdefgj|\s]$/)
-			{$cleaned008[22] = $field008hash{audience};} 
-		else {$hasbadchars .= "booksaudience has bad chars\t"};
+		unless ($field008hash{audience} =~ /^[abcdefgj|\s]$/) {
+			push @warningstoreturn, ("008: Byte 22, Books-Audience has bad characters.")
+		} #Books 22
 
 		# Form of item (byte 23)
 		$field008hash{formofitem} = substr($field008,23,1);
-		if ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/)
-			{$cleaned008[23] = $field008hash{formofitem};} 
-		else {$hasbadchars .= "booksformofitem has bad chars\t"};
+		unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
+			push @warningstoreturn, ("008: Byte 23, Books-Form of item has bad characters.")
+		} #Books 23
 
 		# Nature of contents (byte[24]-[27])
 		$field008hash{bkcontents} = substr($field008,24,4);
-		if ($field008hash{bkcontents} =~ /^[abcdefgijklmnopqrstuvwz|\s]{4}$/)
-			{@cleaned008[24..27] = split ('', $field008hash{bkcontents});} 
-		else {$hasbadchars .= "booksbkcontents has bad chars\t"}; 
+		unless ($field008hash{bkcontents} =~ /^[abcdefgijklmnopqrstuvwz|\s]{4}$/) {
+			push @warningstoreturn, ("008: Bytes 24-27, Books-Contents has bad characters.")
+		} #Books 24-27
 
 		#Government publication (byte 28)
 		$field008hash{govtpub} = substr($field008,28,1);
-		if ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/)
-			{$cleaned008[28] = $field008hash{govtpub};} 
-		else {$hasbadchars .= "booksgovtpub has bad chars\t"};
+		unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+			push @warningstoreturn, ("008: Byte 28, Books-Govt publication has bad characters.")
+		} #Books 28
 
 		#Conference publication (byte 29)
 		$field008hash{confpub} = substr($field008,29,1);
-		if ($field008hash{confpub} =~ /^[01|]$/)
-			{$cleaned008[29] = $field008hash{confpub};} 
-		else {$hasbadchars .= "booksconfpub has bad chars\t"};
+		unless ($field008hash{confpub} =~ /^[01|]$/) {
+			push @warningstoreturn, ("008: Byte 29, Books-Conference publication has bad characters.")
+		} #Books 29
 
 		#Festschrift (byte 30)
 		$field008hash{fest} = substr($field008,30,1);
-		if ($field008hash{fest} =~ /^[01|]$/)
-			{$cleaned008[30] = $field008hash{fest};} 
-		else {$hasbadchars .= "booksfest has bad chars\t"};
+		unless ($field008hash{fest} =~ /^[01|]$/) {
+			push @warningstoreturn, ("008: Byte 30, Books-Festschrift has bad characters.")
+		} #Books 30
 
 		#Index (byte 31)
 		$field008hash{bkindex} = substr($field008,31,1);
-		if ($field008hash{bkindex} =~ /^[01|]$/)
-			{$cleaned008[31] = $field008hash{bkindex};} 
-		else {$hasbadchars .= "booksbkindex has bad chars\t"};
+		unless ($field008hash{bkindex} =~ /^[01|]$/) {
+			push @warningstoreturn, ("008: Byte 31, Books-Index has bad characters.");
+		} #Books 31
 
 		#Undefined (byte 32)
 		$field008hash{obsoletebyte32} = substr($field008,32,1);
-		if ($field008hash{obsoletebyte32} =~ /^[|\s]$/)
-			{$cleaned008[32] = $field008hash{obsoletebyte32};} 
-		else {$hasbadchars .= "booksobsoletebyte32 has bad chars\t"};
+		unless ($field008hash{obsoletebyte32} =~ /^[|\s]$/) {
+			push @warningstoreturn, ("008: Byte 32, Books-Obsoletebyte32 has bad characters.");
+		} #Books 32
 
 		#Literary form (byte 33)
 		$field008hash{fict} = substr($field008,33,1);
-		if ($field008hash{fict} =~ /^[01cdefhijmpsu|\s]$/)
-			{$cleaned008[33] = $field008hash{fict};} 
-		else {$hasbadchars .= "booksfict has bad chars\t"};
+		unless ($field008hash{fict} =~ /^[01cdefhijmpsu|\s]$/) {
+			push @warningstoreturn, ("008: Byte 33, Books-Literary form has bad characters.");
+		} #Books 33
 
 		#Biography (byte 34)
 		$field008hash{biog} = substr($field008,34,1);
-		if ($field008hash{biog} =~ /^[abcd|\s]$/)
-			{$cleaned008[34] = $field008hash{biog};} 
-		else {$hasbadchars .= "booksbiog has bad chars\t"};
+		unless ($field008hash{biog} =~ /^[abcd|\s]$/) {
+			push @warningstoreturn, ("008: Byte 34, Books-Biography has bad characters.");
+		} #Books 34
 
 	} ### Books
 
@@ -2819,45 +2837,45 @@ sub validate008 {
 
 		#Undefined (byte 18-21)
 		$field008hash{electresundef18to21} = substr($field008,18,4);
-		if ($field008hash{electresundef18to21} =~ /^[|\s]{4}$/)
-			{@cleaned008[18..21] = split ('', $field008hash{electresundef18to21});} 
-		else {$hasbadchars .= "electresundef18to21 has bad chars\t"}; 
+		unless ($field008hash{electresundef18to21} =~ /^[|\s]{4}$/) {
+			push @warningstoreturn, ("008: Bytes 18-21, Electronic Resources-Undef18to21 has bad characters.");
+		} #Electronic Resources 18-21
 
 		#Target audience (byte 22)
 		$field008hash{audience} = substr($field008,22,1);
-		if ($field008hash{audience} =~ /^[abcdefgj|\s]$/)
-			{$cleaned008[22] = $field008hash{audience};} 
-		else {$hasbadchars .= "electresaudience has bad chars\t"};
+		unless ($field008hash{audience} =~ /^[abcdefgj|\s]$/) {
+			push @warningstoreturn, ("008: Byte 22, Electronic Resources-Audience has bad characters.");
+		} #Electronic Resources 22
 
 		#Undefined (byte[23]-[25])
 		$field008hash{electresundef23to25} = substr($field008,23,3);
-		if ($field008hash{electresundef23to25} =~ /^[|\s]{3}$/)
-			{@cleaned008[23..25] = split ('', $field008hash{electresundef23to25});} 
-		else {$hasbadchars .= "electresundef23to25 has bad chars\t"}; 
+		unless ($field008hash{electresundef23to25} =~ /^[|\s]{3}$/) {
+			push @warningstoreturn, ("008: Bytes 23-25, Electronic Resources-Undef23to25 has bad characters.");
+		} #Electronic Resources 23-25
 
 		#Type of computer file (byte[26])
 		$field008hash{typeoffile} = substr($field008,26,1);
-		if ($field008hash{typeoffile} =~ /^[abcdefghijmuz|]$/)
-			{$cleaned008[26] = $field008hash{typeoffile};} 
-		else {$hasbadchars .= "electrestypeoffile has bad chars\t"};
+		unless ($field008hash{typeoffile} =~ /^[abcdefghijmuz|]$/) {
+			push @warningstoreturn, ("008: Byte 26, Electronic Resources-Type of file has bad characters.");
+		} #Electronic Resources 26
 
 		#Undefined (byte[27])
 		$field008hash{electresundef27} = substr($field008,27,1);
-		if ($field008hash{electresundef27} =~ /^[|\s]$/)
-			{$cleaned008[27] = $field008hash{electresundef27};} 
-		else {$hasbadchars .= "electresundef27 has bad chars\t"};
+		unless ($field008hash{electresundef27} =~ /^[|\s]$/) {
+			push @warningstoreturn, ("008: Byte 27, Electronic Resources-Undef27 has bad characters.");
+		} #Electronic Resources 27
 
 		#Government publication (byte [28])
 		$field008hash{govtpub} = substr($field008,28,1);
-		if ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/)
-			{$cleaned008[28] = $field008hash{govtpub};} 
-		else {$hasbadchars .= "electresgovtpub has bad chars\t"};
+		unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+			push @warningstoreturn, ("008: Byte 28, Electronic Resources-Govt publication has bad characters.");
+		} #Electronic Resources 28
 
 		#Undefined (byte[29]-[34])
 		$field008hash{electresundef29to34} = substr($field008,29,6);
-		if ($field008hash{electresundef29to34} =~ /^[|\s]{6}$/)
-			{@cleaned008[29..34] = split ('', $field008hash{electresundef29to34});} 
-		else {$hasbadchars .= "electresundef29to34 has bad chars\t"}; 
+		unless ($field008hash{electresundef29to34} =~ /^[|\s]{6}$/) {
+			push @warningstoreturn, ("008: Bytes 29-34, Electronic Resources-Undef29to34 has bad characters.")
+		} #Electronic Resources 29-34 
 
 	} #electronic resources
 
@@ -2875,69 +2893,69 @@ sub validate008 {
 
 		#Relief (byte[18]-[21])
 		$field008hash{relief} = substr($field008,18,4);
-		if ($field008hash{relief} =~ /^[abcdefgijkmz|\s]{4}$/)
-			{@cleaned008[18..21] = split ('', $field008hash{relief});} 
-		else {$hasbadchars .= "maprelief has bad chars\t"}; 
+		unless ($field008hash{relief} =~ /^[abcdefgijkmz|\s]{4}$/) {
+			push @warningstoreturn, ("008: Bytes 18-21, Cartographic-Relief has bad characters.");
+		} #Cartographic 18-21
 
 		#Projection (byte[22]-[23])
 		$field008hash{projection} = substr($field008,22,2);
-		if ($field008hash{projection} =~ /^\|\||\s\s|aa|ab|ac|ad|ae|af|ag|am|an|ap|au|az|ba|bb|bc|bd|be|bf|bg|bh|bi|bj|bo|br|bs|bu|bz|ca|cb|cc|ce|cp|cu|cz|da|db|dc|dd|de|df|dg|dh|dl|zz$/)
-			{@cleaned008[22..23] = split ('', $field008hash{projection});} 
-		else {$hasbadchars .= "mapprojection has bad chars\t"}; 
+		unless ($field008hash{projection} =~ /^\|\||\s\s|aa|ab|ac|ad|ae|af|ag|am|an|ap|au|az|ba|bb|bc|bd|be|bf|bg|bh|bi|bj|bo|br|bs|bu|bz|ca|cb|cc|ce|cp|cu|cz|da|db|dc|dd|de|df|dg|dh|dl|zz$/) {
+			push @warningstoreturn, ("008: Bytes 22-23, Cartographic-Projection has bad characters.");
+			} #Cartographic 22-23 
 
 		#Undefined (byte[24])
 		$field008hash{mapundef24} = substr($field008,24,1);
-		if ($field008hash{mapundef24} =~ /^[|\s]$/)
-			{$cleaned008[24] = $field008hash{mapundef24};} 
-		else {$hasbadchars .= "mapundef24 has bad chars\t"};
+		unless ($field008hash{mapundef24} =~ /^[|\s]$/) {
+			push @warningstoreturn, ("008: Byte 24, Cartographic-Undef24 has bad characters.");
+		} #Cartographic 24
 
 		#Type of cartographic material (byte[25])
 		$field008hash{typeofmap} = substr($field008,25,1);
-		if ($field008hash{typeofmap} =~ /^[abcdefguz|]$/)
-			{$cleaned008[25] = $field008hash{typeofmap};} 
-		else {$hasbadchars .= "maptypeofmap has bad chars\t"};
+		unless ($field008hash{typeofmap} =~ /^[abcdefguz|]$/) {
+			push @warningstoreturn, ("008: Byte 25, Cartographic-Type of map has bad characters.");
+		} #Cartographic 25
 
 		#Undefined (byte[26]-[27])
 		$field008hash{mapundef26to27} = substr($field008,26,2);
-		if ($field008hash{mapundef26to27} =~ /^[|\s]{2}$/)
-			{@cleaned008[26..27] = split ('', $field008hash{mapundef26to27});} 
-		else {$hasbadchars .= "mapundef26to27 has bad chars\t"}; 
+		unless ($field008hash{mapundef26to27} =~ /^[|\s]{2}$/) {
+			push @warningstoreturn, ("008: Bytes 26-27, Cartographic-Undef26to27 has bad characters.");
+		} #Cartographic 26-27 
 
 		#Government publication (byte[28])
 		$field008hash{govtpub} = substr($field008,28,1);
-		if ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/)
-			{$cleaned008[28] = $field008hash{govtpub};} 
-		else {$hasbadchars .= "mapgovtpub has bad chars\t"};
+		unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+			push @warningstoreturn, ("008: Byte 28, Cartographic-Govt publication has bad characters.");
+		} #Cartographic 28
 
 		#Form of item (byte[29])
 		$field008hash{formofitem} = substr($field008,29,1);
-		if ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/)
-			{$cleaned008[29] = $field008hash{formofitem};} 
-		else {$hasbadchars .= "mapformofitem has bad chars\t"};
+		unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
+			push @warningstoreturn, ("008: Byte 29, Cartographic-Form of item has bad characters.");
+		} #Cartographic 29
 
 		#Undefined (byte[30])
 		$field008hash{mapundef30} = substr($field008,30,1);
-		if ($field008hash{mapundef30} =~ /^[|\s]$/)
-			{$cleaned008[30] = $field008hash{mapundef30};} 
-		else {$hasbadchars .= "mapundef30 has bad chars\t"};
+		unless ($field008hash{mapundef30} =~ /^[|\s]$/) {
+			push @warningstoreturn, ("008: Byte 30, Cartographic-Undef30 has bad characters.");
+		} #Cartographic 30
 
 		#Index (byte[31])
 		$field008hash{mapindex} = substr($field008,31,1);
-		if ($field008hash{mapindex} =~ /^[01|]$/)
-			{$cleaned008[31] = $field008hash{mapindex};} 
-		else {$hasbadchars .= "mapindex has bad chars\t"};
+		unless ($field008hash{mapindex} =~ /^[01|]$/) {
+			push @warningstoreturn, ("008: Byte 31, Cartographic-Index has bad characters.");
+		} #Cartographic 31
 
 		#Undefined (byte[32])
 		$field008hash{mapundef32} = substr($field008,32,1);
-		if ($field008hash{mapundef32} =~ /^[|\s]$/)
-			{$cleaned008[32] = $field008hash{mapundef32};} 
-		else {$hasbadchars .= "mapundef32 has bad chars\t"};
+		unless ($field008hash{mapundef32} =~ /^[|\s]$/) {
+			push @warningstoreturn, ("008: Byte 32, Cartographic-Undef32 has bad characters.");
+		} #Cartographic 32
 
 		#Special format characteristics (byte[33]-[34])
 		$field008hash{specialfmtchar} = substr($field008,33,2);
-		if ($field008hash{specialfmtchar} =~ /^[ejklnoprz|\s]{2}$/)
-			{@cleaned008[33..34] = split ('', $field008hash{specialfmtchar});} 
-		else {$hasbadchars .= "mapspecialfmtchar has bad chars\t"}; 
+		unless ($field008hash{specialfmtchar} =~ /^[ejklnoprz|\s]{2}$/) {
+			push @warningstoreturn, ("008: Bytes 33-34, Cartographic-Special format characteristics has bad characters.");
+			} #Cartographic 33-34
 
 	} # Cartographic Materials
 
@@ -2954,156 +2972,65 @@ sub validate008 {
 
 		#Form of composition (byte[18]-[19])
 		$field008hash{formofcomp} = substr($field008,18,2);
-		if ($field008hash{formofcomp} =~ /^\|\||an|bd|bg|bl|bt|ca|cb|cc|cg|ch|cl|cn|co|cp|cr|cs|ct|cy|cz|df|dv|fg|fm|ft|gm|hy|jz|mc|md|mi|mo|mp|mr|ms|mu|mz|nc|nn|op|or|ov|pg|pm|po|pp|pr|ps|pt|pv|rc|rd|rg|ri|rp|rq|sd|sg|sn|sp|st|su|sy|tc|ts|uu|vr|wz|zz$/)
-			{@cleaned008[18..19] = split ('', $field008hash{formofcomp});} 
-		else {$hasbadchars .= "musicformofcomp has bad chars\t"}; 
+		unless ($field008hash{formofcomp} =~ /^\|\||an|bd|bg|bl|bt|ca|cb|cc|cg|ch|cl|cn|co|cp|cr|cs|ct|cy|cz|df|dv|fg|fm|ft|gm|hy|jz|mc|md|mi|mo|mp|mr|ms|mu|mz|nc|nn|op|or|ov|pg|pm|po|pp|pr|ps|pt|pv|rc|rd|rg|ri|rp|rq|sd|sg|sn|sp|st|su|sy|tc|ts|uu|vr|wz|zz$/) {
+			push @warningstoreturn, ("008: Bytes 18-19, Music-Form of composition has bad characters.");
+		} #Music 18-19
 
 		#Format of music (byte[20])
 		$field008hash{fmtofmusic} = substr($field008,20,1);
-		if ($field008hash{fmtofmusic} =~ /^[abcdegmnuz|]$/)
-			{$cleaned008[20] = $field008hash{fmtofmusic};} 
-		else {$hasbadchars .= "musicfmtofmusic has bad chars\t"};
+		unless ($field008hash{fmtofmusic} =~ /^[abcdegmnuz|]$/) {
+			push @warningstoreturn, ("008: Byte 20, Music-Format of music has bad characters.");
+		} #Music 20
 
 		#Music parts (byte[21])
 		$field008hash{musicparts} = substr($field008,21,1);
-		if ($field008hash{musicparts} =~ /^[defnu|\s]$/)
-			{$cleaned008[21] = $field008hash{musicparts};} 
-		else {$hasbadchars .= "musicparts has bad chars\t"};
+		unless ($field008hash{musicparts} =~ /^[defnu|\s]$/) {
+			push @warningstoreturn, ("008: Byte 21, Music-Parts has bad characters.");
+		} #Music 21
 
 		#Target audience (byte[22])
 		$field008hash{audience} = substr($field008,22,1);
-		if ($field008hash{audience} =~ /^[abcdefgj|\s]$/)
-			{$cleaned008[22] = $field008hash{audience};} 
-		else {$hasbadchars .= "musicaudience has bad chars\t"};
+		unless ($field008hash{audience} =~ /^[abcdefgj|\s]$/) {
+			push @warningstoreturn, ("008: Byte 22, Music-Audience has bad characters.");
+		} #Music 22
 
 		#Form of item (byte[23])
 		$field008hash{formofitem} = substr($field008,23,1);
-		if ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/)
-			{$cleaned008[23] = $field008hash{formofitem};} 
-		else {$hasbadchars .= "musicformofitem has bad chars\t"};
+		unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
+			push @warningstoreturn, ("008: Byte 23, Music-Form of item has bad characters.");
+		} #Music 23
 
 		#Accompanying matter (byte[24]-[29])
 		$field008hash{accompmat} = substr($field008,24,6);
-		if ($field008hash{accompmat} =~ /^[abcdefghikrsz|\s]{6}$/)
-			{@cleaned008[24..29] = split ('', $field008hash{accompmat});} 
-		else {$hasbadchars .= "musicaccompmat has bad chars\t"}; 
+		unless ($field008hash{accompmat} =~ /^[abcdefghikrsz|\s]{6}$/) {
+			push @warningstoreturn, ("008: Bytes 24-29, Music-Accompanying material has bad characters.");
+		} #Music 24-29 
 
 		#Literary text for sound recordings (byte[30]-[31])
 		$field008hash{textforsdrec} = substr($field008,30,2);
-		if ($field008hash{textforsdrec} =~ /^[abcdefghijklmnoprstz|\s]{2}$/)
-			{@cleaned008[30..31] = split ('', $field008hash{textforsdrec});} 
-		else {$hasbadchars .= "musictextforsdrec has bad chars\t"}; 
+		unless ($field008hash{textforsdrec} =~ /^[abcdefghijklmnoprstz|\s]{2}$/) {
+			push @warningstoreturn, ("008: Byte 30-31, Music-Text for sound recordings has bad characters.");
+		} #Music 30-31
 
 		#Undefined (byte[32])
 		$field008hash{musicundef32} = substr($field008,32,1);
-		if ($field008hash{musicundef32} =~ /^[|\s]$/)
-			{$cleaned008[32] = $field008hash{musicundef32};} 
-		else {$hasbadchars .= "musicundef32 has bad chars\t"};
+		unless ($field008hash{musicundef32} =~ /^[|\s]$/) {
+			push @warningstoreturn, ("008: Byte 32, Music-Undef32 has bad characters.");
+		} #Music 32
 
 		#Transposition and arrangement (byte[33])
 		$field008hash{transposeandarr} = substr($field008,33,1);
-		if ($field008hash{transposeandarr} =~ /^[abcnu|\s]$/)
-			{$cleaned008[33] = $field008hash{transposeandarr};} 
-		else {$hasbadchars .= "musictransposeandarr has bad chars\t"};
+		unless ($field008hash{transposeandarr} =~ /^[abcnu|\s]$/) {
+			push @warningstoreturn, ("008: Byte 33, Music-Transposition and arrangement has bad characters.");
+		} #Music 33
 
 		#Undefined (byte[34])
 		$field008hash{musicundef34} = substr($field008,34,1);
-		if ($field008hash{musicundef34} =~ /^[|\s]$/)
-			{$cleaned008[34] = $field008hash{musicundef34};} 
-		else {$hasbadchars .= "musicundef34 has bad chars\t"};
+		unless ($field008hash{musicundef34} =~ /^[|\s]$/) {
+			push @warningstoreturn, ("008: Byte 34, Music-Undef34 has bad characters.");
+		} #Music 34
 
 	} # Music and Sound Recordings
-
-	########################################
-	########################################
-	########################################
-	##  Continuing Resources bytes 18-34  ##
-	########################################
-	########################################
-	########################################
-
-	### continuing resources
-	elsif ($biblvl =~ /^[s]$/) {
-
-		# Frequency (byte[18])
-		$field008hash{frequency} = substr($field008,18,1);
-		if ($field008hash{frequency} =~ /^[abcdefghijkmqstuwz|\s]$/)
-			{$cleaned008[18] = $field008hash{frequency};} 
-		else {$hasbadchars .= "contresfrequency has bad chars\t"};
-
-		# Regularity (byte[19])
-		$field008hash{regularity} = substr($field008,19,1);
-		if ($field008hash{regularity} =~ /^[nrux|]$/)
-			{$cleaned008[19] = $field008hash{regularity};} 
-		else {$hasbadchars .= "contresregularity has bad chars\t"};
-
-		#ISSN center (byte[20])
-		$field008hash{issncenter} = substr($field008,20,1);
-		if ($field008hash{issncenter} =~ /^[0124z|\s]$/)
-			{$cleaned008[20] = $field008hash{issncenter};} 
-		else {$hasbadchars .= "contresissncenter has bad chars\t"};
-
-		#Type of continuing resource (byte[21])
-		$field008hash{typeofcontres} = substr($field008,21,1);
-		if ($field008hash{typeofcontres} =~ /^[dlmnpw|\s]$/)
-			{$cleaned008[21] = $field008hash{typeofcontres};} 
-		else {$hasbadchars .= "contrestypeofcontres has bad chars\t"};
-
-		#Form of original item (byte[22])
-		$field008hash{formoforig} = substr($field008,22,1);
-		if ($field008hash{formoforig} =~ /^[abcdefs\s]$/)
-			{$cleaned008[22] = $field008hash{formoforig};} 
-		else {$hasbadchars .= "contresformoforig has bad chars\t"};
-
-		#Form of item (byte[23])
-		$field008hash{formofitem} = substr($field008,23,1);
-		if ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/)
-			{$cleaned008[23] = $field008hash{formofitem};} 
-		else {$hasbadchars .= "contresformofitem has bad chars\t"};
-
-		#Nature of entire work (byte[24])
-		$field008hash{natureofwk} = substr($field008,24,1);
-		if ($field008hash{natureofwk} =~ /^[abcdefghiklmnopqrstuvwz|\s]$/)
-			{$cleaned008[24] = $field008hash{natureofwk};} 
-		else {$hasbadchars .= "contresnatureofwk has bad chars\t"};
-
-		#Nature of contents (byte[25]-[27])
-		$field008hash{contrescontents} = substr($field008,25,3);
-		if ($field008hash{contrescontents} =~ /^[abcdefghiklmnopqrstuvwz|\s]{3}$/)
-			{@cleaned008[25..27] = split ('', $field008hash{contrescontents});} 
-		else {$hasbadchars .= "contrescontents has bad chars\t"}; 
-
-		#Government publication (byte[28])
-		$field008hash{govtpub} = substr($field008,28,1);
-		if ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/)
-			{$cleaned008[28] = $field008hash{govtpub};} 
-		else {$hasbadchars .= "contresgovtpub has bad chars\t"};
-
-		#Conference publication (byte[29])
-		$field008hash{confpub} = substr($field008,29,1);
-		if ($field008hash{confpub} =~ /^[01|]$/)
-			{$cleaned008[29] = $field008hash{confpub};} 
-		else {$hasbadchars .= "contresconfpub has bad chars\t"};
-
-		#Undefined (byte[30]-[32])
-		$field008hash{contresundef30to32} = substr($field008,30,3);
-		if ($field008hash{contresundef30to32} =~ /^[|\s]{3}$/)
-			{@cleaned008[30..32] = split ('', $field008hash{contresundef30to32});} 
-		else {$hasbadchars .= "contresundef30to32 has bad chars\t"}; 
-
-		#Original alphabet or script of title (byte[33])
-		$field008hash{origalphabet} = substr($field008,33,1);
-		if ($field008hash{origalphabet} =~ /^[abcdefghijkluz|\s]$/)
-			{$cleaned008[33] = $field008hash{origalphabet};} 
-		else {$hasbadchars .= "contresorigalphabet has bad chars\t"};
-
-		#Entry convention (byte[34])
-		$field008hash{entryconvention} = substr($field008,34,1);
-		if ($field008hash{entryconvention} =~ /^[012|]$/)
-			{$cleaned008[34] = $field008hash{entryconvention};} 
-		else {$hasbadchars .= "contresentryconvention has bad chars\t"};
-
-	} # Continuing Resources
 
 	########################################
 	########################################
@@ -3118,57 +3045,56 @@ sub validate008 {
 
 		#Running time for motion pictures and videorecordings (byte[18]-[20])
 		$field008hash{runningtime} = substr($field008,18,3);
-		if ($field008hash{runningtime} =~ /^([|\d]{3}|\-{3}|n{3})$/)
-			{@cleaned008[18..20] = split ('', $field008hash{runningtime});} 
-		else {$hasbadchars .= "visualmatrunningtime has bad chars\t"}; 
+		unless ($field008hash{runningtime} =~ /^([|\d]{3}|\-{3}|n{3})$/) {
+			push @warningstoreturn, ("008: Bytes 18-20, Visual materials-Runningtime has bad characters.")
+		} #Visual materials 18-20
 
 		#Undefined (byte[21])
 		$field008hash{visualmatundef21} = substr($field008,21,1);
-		if ($field008hash{visualmatundef21} =~ /^[|\s]$/)
-			{$cleaned008[21] = $field008hash{visualmatundef21};} 
-		else {$hasbadchars .= "visualmatundef21 has bad chars\t"};
+		unless ($field008hash{visualmatundef21} =~ /^[|\s]$/) {
+			push @warningstoreturn, ("008: Byte 21, Visual materials-Undef21 has bad characters.");
+		} #Visual materials 21
 
 		#Target audience (byte[22])
 		$field008hash{audience} = substr($field008,22,1);
-		if ($field008hash{audience} =~ /^[abcdefgj|\s]$/)
-			{$cleaned008[22] = $field008hash{audience};} 
-		else {$hasbadchars .= "visualmataudience has bad chars\t"};
+		unless ($field008hash{audience} =~ /^[abcdefgj|\s]$/) {
+			push @warningstoreturn, ("008: Byte 22, Visual materials-Audience has bad characters.");
+		} #Visual materials 22
 
 		#Undefined (byte[23]-[27])
 		$field008hash{visualmatundef23to27} = substr($field008,23,5);
-		if ($field008hash{visualmatundef23to27} =~ /^[|\s]{5}$/)
-			{@cleaned008[23..27] = split ('', $field008hash{visualmatundef23to27});} 
-		else {$hasbadchars .= "visualmatundef23to27 has bad chars\t"}; 
+		unless ($field008hash{visualmatundef23to27} =~ /^[|\s]{5}$/) {
+			push @warningstoreturn, ("008: Bytes 23-27, Visual materials-Undef23to27 has bad characters.");
+		} #Visual materials 23-27 
 
 		#Government publication (byte[28])
 		$field008hash{govtpub} = substr($field008,28,1);
-		if ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/)
-			{$cleaned008[28] = $field008hash{govtpub};} 
-		else {$hasbadchars .= "visualmatgovtpub has bad chars\t"};
+		unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+			push @warningstoreturn, ("008: Byte 28, Visual materials-Govt publication has bad characters.");
+		} #Visual materials 28
 
 		#Form of item (byte[29])
 		$field008hash{formofitem} = substr($field008,29,1);
-		if ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/)
-			{$cleaned008[29] = $field008hash{formofitem};} 
-		else {$hasbadchars .= "visualmatformofitem has bad chars\t"};
+		unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
+			push @warningstoreturn, ("008: Byte 29, Visual materials-Form of item has bad characters.");
+		} #Visual materials 29
 
 		#Undefined (byte[30]-[32])
 		$field008hash{visualmatundef30to32} = substr($field008,30,3);
-		if ($field008hash{visualmatundef30to32} =~ /^[|\s]{3}$/)
-			{@cleaned008[30..32] = split ('', $field008hash{visualmatundef30to32});} 
-		else {$hasbadchars .= "visualmatundef30to32 has bad chars\t"}; 
+		unless ($field008hash{visualmatundef30to32} =~ /^[|\s]{3}$/) {
+			push @warningstoreturn, ("008: Bytes 30-32, Visual materials-Undef30to32 has bad characters.");
+		} #Visual materials 30-32 
 
 		#Type of visual material (byte[33])
 		$field008hash{typevisualmaterial} = substr($field008,33,1);
-		if ($field008hash{typevisualmaterial} =~ /^[abcdfgiklmnopqrstvwz|]$/)
-			{$cleaned008[33] = $field008hash{typevisualmaterial};} 
-		else {$hasbadchars .= "visualmattypevisualmaterial has bad chars\t"};
+		unless ($field008hash{typevisualmaterial} =~ /^[abcdfgiklmnopqrstvwz|]$/) {
+			push @warningstoreturn, ("008: Byte 33, Visual materials-Type of visual material has bad characters.");
+		}
 
 		#Technique (byte[34])
 		$field008hash{technique} = substr($field008,34,1);
-		if ($field008hash{technique} =~ /^[aclnuz|]$/)
-			{$cleaned008[34] = $field008hash{technique};} 
-		else {$hasbadchars .= "visualmattechnique has bad chars\t"};
+		unless ($field008hash{technique} =~ /^[aclnuz|]$/) { push @warningstoreturn, ("008: Byte 34, Visual materials-Technique has bad characters.");
+		} #Visual materials 34
 
 	} #Visual Materials
 
@@ -3185,28 +3111,27 @@ sub validate008 {
 
 		#Undefined (byte[18]-[22])
 		$field008hash{mixedundef18to22} = substr($field008,18,5);
-		if ($field008hash{mixedundef18to22} =~ /^[|\s]{5}$/)
-			{@cleaned008[18..22] = split ('', $field008hash{mixedundef18to22});} 
-		else {$hasbadchars .= "mixedundef18to22 has bad chars\t"}; 
+		unless ($field008hash{mixedundef18to22} =~ /^[|\s]{5}$/) {
+			push @warningstoreturn, ("008: Bytes 18-22, Mixed materials-Undef18to22 has bad characters.");
+		} #Mixed materials 18-22 
 
 		#Form of item (byte[23])
 		$field008hash{formofitem} = substr($field008,23,1);
-		if ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/)
-			{$cleaned008[23] = $field008hash{formofitem};} 
-		else {$hasbadchars .= "mixedformofitem has bad chars\t"};
+		unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
+			push @warningstoreturn, ("008: Byte 23, Mixed materials-Form of item has bad characters.");
+		} #Mixed materials 23
 
 		#Undefined (byte[24]-[34])
 		$field008hash{mixedundef24to34} = substr($field008,24,11);
-		if ($field008hash{mixedundef24to34} =~ /^[|\s]{11}$/)
-			{@cleaned008[24..34] = split ('', $field008hash{mixedundef24to34});} 
-		else {$hasbadchars .= "mixedundef24to34 has bad chars\t"}; 
+		unless ($field008hash{mixedundef24to34} =~ /^[|\s]{11}$/) {
+			push @warningstoreturn, ("008: Byes 24-34, Mixed materials-Undef24to34 has bad characters.");
+		} #Mixed materials 24-30 
 
 	} #Mixed Materials
 
-	return (\%field008hash, \@cleaned008, \$hasbadchars);
+	return (\@warningstoreturn);
 
 } #validate008
-
 
 #########################################
 #########################################
@@ -3224,6 +3149,14 @@ sub validate008 {
 #########################################
 
 =head1 CHANGES/VERSION HISTORY
+
+Version 1.04: Updated Nov. 4-Dec. 4, 2004. Released Dec. 5, 2004.
+
+ -Updated validate008() to use MARC::Lint::CodeData.
+ -Removed DATA section, since this is now in MARC::Lint::CodeData.
+ -Updated check_008() to use the new validate008().
+ -Revised bib. refs. check to require 'reference' to be followed by optional 's', optional period, and word boundary (to catch things like 'referenced'.
+
 
 Version 1.03: Updated Aug. 30-Oct. 16, 2004. Released Oct. 17. First CPAN version.
 
@@ -3332,18 +3265,3 @@ Copyright (c) 2003-2004
 =cut
 
 1;
-
-__DATA__
-__CountryCodes__
-af 	alu	aku	aa 	abc	ae 	as 	an 	ao 	am 	ay 	aq 	ag 	azu	aru	ai 	aw 	at 	au 	aj 	bf 	ba 	bg 	bb 	bw 	be 	bh 	dm 	bm 	bt 	bo 	bn 	bs 	bv 	bl 	bcc	bi 	vb 	bx 	bu 	uv 	br 	bd 	cau	cb 	cm 	xxc	cv 	cj 	cx 	cd 	cl 	cc 	ch 	xa 	xb 	ck 	cou	cq 	cf 	cg 	ctu	cw 	cr 	ci 	cu 	cy 	xr 	iv 	deu	dk 	dcu	ft 	dq 	dr 	em 	ec 	ua 	es 	enk	eg 	ea 	er 	et 	fk 	fa 	fj 	fi 	flu	fr 	fg 	fp 	go 	gm 	gz 	gau	gs 	gw 	gh 	gi 	gr 	gl 	gd 	gp 	gu 	gt 	gv 	pg 	gy 	ht 	hiu	hm 	ho 	hu 	ic 	idu	ilu	ii 	inu	io 	iau	ir 	iq 	iy 	ie 	is 	it 	jm 	ja 	ji 	jo 	ksu	kz 	kyu	ke 	gb 	kn 	ko 	ku 	kg 	ls 	lv 	le 	lo 	lb 	ly 	lh 	li 	lau	lu 	xn 	mg 	meu	mw 	my 	xc 	ml 	mm 	mbc	xe 	mq 	mdu	mau	mu 	mf 	ot 	mx 	miu	fm 	xf 	mnu	msu	mou	mv 	mc 	mp 	mtu	mj 	mr 	mz 	sx 	nu 	nbu	np 	ne 	na 	nvu	nkc	nl 	nhu	nju	nmu	nyu	nz 	nfc	nq 	ng 	nr 	xh 	xx 	nx 	ncu	ndu	nik	nw 	ntc	no 	nsc	nuc	ohu	oku	mk 	onc	oru	pk 	pw 	pn 	pp 	pf 	py 	pau	pe 	ph 	pc 	pl 	po 	pic	pr 	qa 	quc	riu	rm 	ru 	rw 	re 	xj 	xd 	xk 	xl 	xm 	ws 	sm 	sf 	snc	su 	stk	sg 	yu 	se 	sl 	si 	xo 	xv 	bp 	so 	sa 	scu	sdu	xs 	sp 	sh 	xp 	ce 	sj 	sr 	sq 	sw 	sz 	sy 	ta 	tz 	tnu	fs 	txu	th 	tg 	tl 	to 	tr 	ti 	tu 	tk 	tc 	tv 	ug 	un 	ts 	xxk	uik	xxu	uc 	up 	uy 	utu	uz 	nn 	vp 	vc 	ve 	vtu	vm 	vi 	vau	wk 	wlk	wf 	wau	wj 	wvu	ss 	wiu	wyu	ye 	ykc	za 	rh 
-__ObsoleteCountry__
-ai 	air	ac 	ajr	bwr	cn 	cz 	cp 	ln 	cs 	err	gsr	ge 	gn 	hk 	iw 	iu 	jn 	kzr	kgr	lvr	lir	mh 	mvr	nm 	pt 	rur	ry 	xi 	sk 	xxr	sb 	sv 	tar	tt 	tkr	unr	uk 	ui 	us 	uzr	vn 	vs 	wb 	ys 
-__GeogAreaCodes__
-a-af---	f------	fc-----	fe-----	fq-----	ff-----	fh-----	fs-----	fb-----	fw-----	n-us-al	n-us-ak	e-aa---	n-cn-ab	f-ae---	ea-----	sa-----	poas---	aa-----	sn-----	e-an---	f-ao---	nwxa---	a-cc-an	t------	nwaq---	nwla---	n-usa--	ma-----	ar-----	au-----	r------	s-ag---	n-us-az	n-us-ar	a-ai---	nwaw---	lsai---	u-ac---	a------	ac-----	as-----	l------	fa-----	u------	u-at---	u-at-ac	e-au---	a-aj---	lnaz---	nwbf---	a-ba---	ed-----	eb-----	a-bg---	nwbb---	a-cc-pe	e-bw---	e-be---	ncbh---	el-----	ab-----	f-dm---	lnbm---	a-bt---	mb-----	a-ccp--	s-bo---	nwbn---	a-bn---	e-bn---	f-bs---	lsbv---	s-bl---	n-cn-bc	i-bi---	nwvb---	a-bx---	e-bu---	f-uv---	a-br---	f-bd---	n-us-ca	a-cb---	f-cm---	n-cn---	nccz---	lnca---	lncv---	cc-----	poci---	ak-----	e-urk--	e-urr--	nwcj---	f-cx---	nc-----	e-urc--	f-cd---	s-cl---	a-cc---	a-cc-cq	i-xa---	i-xb---	q------	s-ck---	n-us-co	b------	i-cq---	f-cf---	f-cg---	fg-----	n-us-ct	pocw---	u-cs---	nccr---	e-ci---	nwcu---	nwco---	a-cy---	e-xr---	e-cs---	f-iv---	eo-----	zd-----	n-us-de	e-dk---	dd-----	d------	f-ft---	nwdq---	nwdr---	x------	n-usr--	ae-----	an-----	a-em---	poea---	xa-----	s-ec---	f-ua---	nces---	e-uk-en	f-eg---	f-ea---	e-er---	f-et---	me-----	e------	ec-----	ee-----	en-----	es-----	ew-----	lsfk---	lnfa---	pofj---	e-fi---	n-us-fl	e-fr---	h------	s-fg---	pofp---	a-cc-fu	f-go---	pogg---	f-gm---	a-cc-ka	awgz---	n-us-ga	a-gs---	e-gx---	e-ge---	e-gw---	f-gh---	e-gi---	e-uk---	e-uk-ui	nl-----	np-----	fr-----	e-gr---	n-gl---	nwgd---	nwgp---	pogu---	a-cc-kn	a-cc-kc	ncgt---	f-gv---	f-pg---	a-cc-kw	s-gy---	a-cc-ha	nwht---	n-us-hi	i-hm---	a-cc-hp	a-cc-he	a-cc-ho	ah-----	nwhi---	ncho---	a-cc-hk	a-cc-hh	n-cnh--	a-cc-hu	e-hu---	e-ic---	n-us-id	n-us-il	a-ii---	i------	n-us-in	ai-----	a-io---	a-cc-im	m------	c------	n-us-ia	a-ir---	a-iq---	e-ie---	a-is---	e-it---	nwjm---	lnjn---	a-ja---	a-cc-ku	a-cc-ki	a-cc-kr	poji---	a-jo---	zju----	n-us-ks	a-kz---	n-us-ky	f-ke---	poki---	pokb---	a-kr---	a-kn---	a-ko---	a-cck--	a-ku---	a-kg---	a-ls---	cl-----	e-lv---	a-le---	nwli---	f-lo---	a-cc-lp	f-lb---	f-ly---	e-lh---	poln---	e-li---	n-us-la	e-lu---	a-cc-mh	e-xn---	f-mg---	lnma---	n-us-me	f-mw---	am-----	a-my---	i-xc---	f-ml---	e-mm---	n-cn-mb	poxd---	n-cnm--	zma----	poxe---	nwmq---	n-us-md	n-us-ma	f-mu---	i-mf---	i-my---	mm-----	ag-----	pome---	zme----	n-mx---	nm-----	n-us-mi	pott---	pomi---	n-usl--	aw-----	n-usc--	poxf---	n-us-mn	n-us-ms	n-usm--	n-us-mo	n-uss--	e-mv---	e-mc---	a-mp---	n-us-mt	nwmj---	zmo----	f-mr---	f-mz---	f-sx---	ponu---	n-us-nb	a-np---	zne----	e-ne---	nwna---	n-us-nv	n-cn-nk	ponl---	n-usn--	a-nw---	n-us-nh	n-us-nj	n-us-nm	u-at-ne	n-us-ny	u-nz---	n-cn-nf	ncnq---	f-ng---	fi-----	f-nr---	fl-----	a-cc-nn	poxh---	n------	ln-----	n-us-nc	n-us-nd	pn-----	n-use--	xb-----	e-uk-ni	u-at-no	n-cn-nt	e-no---	n-cn-ns	n-cn-nu	po-----	n-us-oh	n-uso--	n-us-ok	a-mk---	n-cn-on	n-us-or	zo-----	p------	a-pk---	popl---	ncpn---	a-pp---	aopf---	s-py---	n-us-pa	ap-----	s-pe---	a-ph---	popc---	zpl----	e-pl---	pops---	e-po---	n-cnp--	n-cn-pi	nwpr---	ep-----	a-qa---	a-cc-ts	u-at-qn	n-cn-qu	mr-----	er-----	n-us-ri	sp-----	nr-----	e-rm---	e-ru---	e-ur---	e-urf--	f-rw---	i-re---	nwsd---	fd-----	nweu---	lsxj---	nwxi---	nwxk---	nwst---	n-xl---	nwxm---	pows---	posh---	e-sm---	f-sf---	n-cn-sn	zsa----	a-su---	ev-----	e-uk-st	f-sg---	i-se---	a-cc-ss	a-cc-sp	a-cc-sm	a-cc-sh	e-urs--	e-ure--	e-urw--	a-cc-sz	f-sl---	a-si---	e-xo---	e-xv---	i-xo---	zs-----	pobp---	f-so---	f-sa---	s------	az-----	ls-----	u-at-sa	n-us-sc	ao-----	n-us-sd	lsxs---	ps-----	xc-----	n-usu--	n-ust--	e-urn--	e-sp---	f-sh---	aoxp---	a-ce---	f-sj---	fn-----	fu-----	zsu----	s-sr---	lnsb---	nwsv---	f-sq---	e-sw---	e-sz---	a-sy---	a-ch---	a-ta---	f-tz---	u-at-tm	n-us-tn	i-fs---	n-us-tx	a-th---	af-----	a-cc-tn	a-cc-ti	at-----	f-tg---	potl---	poto---	nwtr---	lstd---	w------	f-ti---	a-tu---	a-tk---	nwtc---	potv---	f-ug---	e-un---	a-ts---	n-us---	nwuc---	poup---	e-uru--	zur----	s-uy---	n-us-ut	a-uz---	ponn---	e-vc---	s-ve---	zve----	n-us-vt	u-at-vi	a-vt---	nwvi---	n-us-va	e-urp--	fv-----	powk---	e-uk-wl	powf---	n-us-dc	n-us-wa	n-usp--	awba---	nw-----	n-us-wv	u-at-we	xd-----	f-ss---	nwwi---	n-us-wi	n-us-wy	a-ccs--	a-cc-su	a-ccg--	a-ccy--	ay-----	a-ye---	e-yu---	n-cn-yk	a-cc-yu	fz-----	f-za---	a-cc-ch	f-rh---
-__ObsoleteGeogAreaCodes__
-t-ay---	e-ur-ai	e-ur-aj	nwbc---	e-ur-bw	f-by---	pocp---	e-url--	cr-----	v------	e-ur-er	et-----	e-ur-gs	pogn---	nwga---	nwgs---	a-hk---	ei-----	f-if---	awiy---	awiw---	awiu---	e-ur-kz	e-ur-kg	e-ur-lv	e-ur-li	a-mh---	cm-----	e-ur-mv	n-usw--	a-ok---	a-pt---	e-ur-ru	pory---	nwsb---	posc---	a-sk---	posn---	e-uro--	e-ur-ta	e-ur-tk	e-ur-un	e-ur-uz	a-vn---	a-vs---	nwvr---	e-urv--	a-ys---
-__LanguageCodes__
-abk	ace	ach	ada	ady	aar	afh	afr	afa	aka	akk	alb	ale	alg	tut	amh	apa	ara	arg	arc	arp	arw	arm	art	asm	ath	aus	map	ava	ave	awa	aym	aze	ast	ban	bat	bal	bam	bai	bad	bnt	bas	bak	baq	btk	bej	bel	bem	ben	ber	bho	bih	bik	bis	bos	bra	bre	bug	bul	bua	bur	cad	car	cat	cau	ceb	cel	cai	chg	cmc	cha	che	chr	chy	chb	chi	chn	chp	cho	chu	chv	cop	cor	cos	cre	mus	crp	cpe	cpf	cpp	crh	scr	cus	cze	dak	dan	dar	day	del	din	div	doi	dgr	dra	dua	dut	dum	dyu	dzo	bin	efi	egy	eka	elx	eng	enm	ang	epo	est	gez	ewe	ewo	fan	fat	fao	fij	fin	fiu	fon	fre	frm	fro	fry	fur	ful	glg	lug	gay	gba	geo	ger	gmh	goh	gem	gil	gon	gor	got	grb	grc	gre	grn	guj	gwi	gaa	hai	hat	hau	haw	heb	her	hil	him	hin	hmo	hit	hmn	hun	hup	iba	ice	ido	ibo	ijo	ilo	smn	inc	ine	ind	inh	ina	ile	iku	ipk	ira	gle	mga	sga	iro	ita	jpn	jav	jrb	jpr	kbd	kab	kac	xal	kal	kam	kan	kau	kaa	kar	kas	kaw	kaz	kha	khm	khi	kho	kik	kmb	kin	kom	kon	kok	kor	kpe	kro	kua	kum	kur	kru	kos	kut	kir	lad	lah	lam	lao	lat	lav	ltz	lez	lim	lin	lit	nds	loz	lub	lua	lui	smj	lun	luo	lus	mac	mad	mag	mai	mak	mlg	may	mal	mlt	mnc	mdr	man	mni	mno	glv	mao	arn	mar	chm	mah	mwr	mas	myn	men	mic	min	mis	moh	mol	mkh	lol	mon	mos	mul	mun	nah	nau	nav	nbl	nde	ndo	nap	nep	new	nia	nic	ssa	niu	nog	nai	sme	nso	nor	nob	nno	nub	nym	nya	nyn	nyo	nzi	oci	oji	non	peo	ori	orm	osa	oss	oto	pal	pau	pli	pam	pag	pan	pap	paa	per	phi	phn	pol	pon	por	pra	pro	pus	que	roh	raj	rap	rar	roa	rom	rum	run	rus	sal	sam	smi	smo	sad	sag	san	sat	srd	sas	sco	gla	sel	sem	scc	srr	shn	sna	iii	sid	sgn	bla	snd	sin	sit	sio	sms	den	sla	slo	slv	sog	som	son	snk	wen	sot	sai	sma	spa	suk	sux	sun	sus	swa	ssw	swe	syr	tgl	tah	tai	tgk	tmh	tam	tat	tel	tem	ter	tet	tha	tib	tir	tig	tiv	tli	tpi	tkl	tog	ton	chk	tsi	tso	tsn	tum	tup	tur	ota	tuk	tvl	tyv	twi	udm	uga	uig	ukr	umb	und	urd	uzb	vai	ven	vie	vol	vot	wak	wal	wln	war	was	wel	wol	xho	sah	yao	yap	yid	yor	ypk	znd	zap	zen	zha	zul	zun
-__ObsoleteLanguageCodes__
-ajm	esk	esp	eth	far	fri	gag	gua	int	iri	cam	kus	mla	max	lan	gal	lap	sao	gae	sho	snh	sso	swz	tag	taj	tar	tru	tsw
-__END__

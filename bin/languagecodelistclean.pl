@@ -6,7 +6,7 @@ Language Code List Cleanup
 
 =head2 DESCRIPTION
 
-Reads MARC code list for languages (plain text)--L<http://www.loc.gov/marc/languages/langascii.html>.
+Reads MARC code list for languages (plain text--ASCII version L<http://www.loc.gov/marc/>).
 Writes only codes and language name, separated by tab.
 For obsolete codes, adds these at end of output file (keeping the hyphen).
 
@@ -144,7 +144,7 @@ employers of the various contributors to the code.
 =head1 AUTHOR
 
 Bryan Baldus
-eija [at] inwave [dot] com
+eijabb@cpan.org
 
 Copyright (c) 2003-2004
 

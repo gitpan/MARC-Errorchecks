@@ -13,11 +13,11 @@ Write separate test for 008 byte checking (with a variety of 008 strings).
 =cut
 
 use strict;
-use Test::More tests=>24;
+use Test::More tests=>29;
 
 BEGIN { use_ok( 'MARC::File::USMARC' ); }
 BEGIN { use_ok( 'MARC::Errorchecks' ); }
-print "MARC::Errorchecks version $MARC::Errorchecks::VERSION\n";
+
 =head2 UNIMPLEMENTED
 
 #may add this section later
@@ -132,7 +132,12 @@ FROM_TEXT: {
 		q{245: has trailing spaces.},
 		q{250: has multiple consecutive periods that do not appear to be ellipses.},
 		#008 byte checking returned errors will change in future version
-		q{008: Year entered is after 2006 or before 1980	Month entered is greater than 12 or is 00dateentered has bad chars	date2 has bad chars	pubctry has bad chars	langcode has bad chars	catsource has bad chars	booksconfpub has bad chars	},
+		q{008: Bytes 0-5, Date entered has bad characters. Year entered is after 2006 or before 1980	Month entered is greater than 12 or is 00.},
+		q{008: Bytes 11-14 Date2, has bad characters.},
+		q{008: Bytes 15-17, Country of Publication (wis) is not valid.},
+		q{008: Bytes 35-37, Language (end) not valid.},
+		q{008: Byte 39, Cataloging source has bad characters.},
+		q{008: Byte 29, Books-Conference publication has bad characters.},
 		q{010: First digits of LCCN are 2008},
 		q{300: 4xx exists but 300 does not end with period.},
 		q{300: Check subfield _a for p. or v.},
@@ -215,6 +220,3 @@ FROM_TEXT: {
 
 
 =cut
-
-print "Press Enter to quit";
-<>;
