@@ -1,5 +1,15 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.07: Updated Dec. 11-Feb. 2005. Released Feb. 13, 2005.
+
+ -check_double_periods() skips field 856, where multiple punctuation is possible for URIs.
+ -added code in check_internal_spaces() to account for spaces between angle brackets in open dates in field 260c.
+ -Updated various subs to verify that 008 exists (and quietly return if not. check_008 will report the error).
+ -Changed #! line, removed -w, replaced with use warnings.
+ -Added error message to check_bk008_vs_bibrefandindex($record) if 008 book
+ index byte is not 0 or 1. This will result in duplicate errors if check_008 is
+ also called on the record.
+
 Version 1.05 and 1.06: Updated Dec. 6-7. Released Dec. 6-7, 2004.
 
  -CPAN distribution fix.

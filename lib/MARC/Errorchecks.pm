@@ -1,8 +1,10 @@
-#!/usr/bin/perl -w
+#!perl
 
 package MARC::Errorchecks;
 
 use strict;
+use warnings;
+
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
 require Exporter;
@@ -13,7 +15,7 @@ require AutoLoader;
 
 
 
-$VERSION = 1.06;
+$VERSION = 1.07;
 
 =head1 NAME
 
@@ -77,9 +79,6 @@ return \@warningstoreturn;
 =head1 TO DO
 
 Maintain check-all subroutine, a wrapper that calls all the subroutines in Errorchecks, to simplify calling code in .pl.
-
-Verify each of the codes in the data against current lists and lists of changes. Maintain code list data when future changes occur.
-Possibly move the code list data into a separate file (e.g., MARC::Errorchecks::CodeData)
 
 Determine whether extra tabs are being added to warnings.
 Examine how warnings are returned and see if a better way is available.
@@ -205,7 +204,9 @@ Looks for multiple commas.
 
 Find exceptions where double periods may be allowed.
 Find exceptions where more than 3 periods can be next to each other.
-Deal with the exceptions.
+Find exceptions where double commas are allowed (URI subfields, 856 field).
+
+Deal with the exceptions. Currently, skips 856 field completely. Needs to skip URI subfields.
 
 =cut
 
@@ -223,7 +224,8 @@ sub check_double_periods {
 	foreach my $field (@fields) {
 		#skip tags lower than 011
 		next if ($field->tag() <= 10);
-
+		#skip 856
+		next if ($field->tag() eq '856');
 		my @subfields = $field->subfields();
 		my @newsubfields = ();
 
@@ -265,8 +267,12 @@ sub check_double_periods {
 
 Looks for more than one space within subfields after 010.
 Ignores 035 field, since multiple spaces could be allowed.
+Accounts for extra spaces between angle brackets for open date in 260c. Current version allows extra spaces in any 260 subfield containing angle brackets.
+
 
 =head2 TO DO (check_internal_spaces)
+
+Account for non-numeric tags? Will likely complain for non-numeric tags in a record, since comparisons rely upon numeric tag checking.
 
 =cut
 
@@ -284,7 +290,7 @@ sub check_internal_spaces {
 		#skip tags lower than 011
 		next if ($field->tag() <= 10);
 		#skip 035 field as well
-		next if ($field->tag() == 35);
+		next if ($field->tag() == 035);
 		#skip 787 field as well
 		next if ($field->tag() == 787);
 
@@ -303,7 +309,8 @@ sub check_internal_spaces {
 
 			#report subfield data with more than one space
 			if ($subdata =~ /  +/) {
-				push @warningstoreturn, join '', ($field->tag(), ": has multiple internal spaces.");
+				#warn, with exception for 260c with open date in angle brackets
+				push @warningstoreturn, join '', ($field->tag(), ": has multiple internal spaces.") unless (($field->tag() == 260) && ($subdata =~ /\<.*\>/));
 			} #if has multiple spaces
 
 ########################################
@@ -408,8 +415,14 @@ sub check_008 {
 	#$mattype and $biblvl are from LDR/06 and LDR/07
 	my $mattype = substr($leader, 6, 1); 
 	my $biblvl = substr($leader, 7, 1);
-	my $field008 = $record->field('008')->as_string();
-
+	my $field008 = $record->field('008')->as_string() if $record->field('008');
+	
+	#report missing 008 field
+	unless ($field008) {
+		push @warningstoreturn, ("008: Record lacks 008 field") ;
+		return \@warningstoreturn;
+	} #unless field 008 exists
+	
 	#call validate008 subroutine from Errorchecks.pm (this package)
 	@warningstoreturn = @{MARC::Errorchecks::validate008($field008, $mattype, $biblvl)};
 
@@ -680,7 +693,9 @@ sub check_bk008_vs_300 {
 	#otherwise, match 008/18-21 vs. 300.
 	else {
 
-		my $field008 = $record->field('008')->as_string();
+		my $field008 = $record->field('008')->as_string() if $record->field('008');
+		return \@warningstoreturn unless $field008;
+	
 		#illustration codes are in bytes 18-21
 		my $illcodes = substr($field008, 18, 4);
 		my ($hasill, $hasmap, $hasport, $hascharts, $hasplans, $hasplates, $hasmusic, $hasfacsim, $hascoats, $hasgeneal, $hasforms, $hassamples, $hasphono, $hasphotos, $hasillumin);
@@ -1085,7 +1100,9 @@ sub matchpubdates {
 	#skip CIP-level records unless 260 exists
 	if ($encodelvl eq '8') {return \@warningstoreturn  unless ($record->field('260'));}
 
-	my $field008 = $record->field('008')->as_string();
+	my $field008 = $record->field('008')->as_string() if ($record->field('008'));
+	return \@warningstoreturn unless ($field008);
+
 	#date1 is in bytes 7-10
 	my $date1 = substr($field008, 7, 4);
 
@@ -1257,8 +1274,14 @@ sub check_bk008_vs_bibrefandindex {
 	#skip non-book (other than cartographic) records
 	if ($mattype !~ /^[ae]$/) {return \@warningstoreturn;}
 
-	my $field008 = $record->field('008')->as_string();
+	my $field008 = $record->field('008')->as_string() if ($record->field('008'));
+	return \@warningstoreturn unless ($field008);
+
 	my $bkindex = substr($field008,31,1);
+	#report error if $bkindex is not 0 or 1
+	##this will result in dual errors if check_008 is also called.
+	push @warningstoreturn, ("008: Book index must be 0 or 1.") unless $bkindex =~ /[01]/;
+	
 	my $bkcontents = substr($field008,24,4);
 
 #############################
@@ -1293,7 +1316,7 @@ sub check_bk008_vs_bibrefandindex {
 	} # if 'Includes index(es).' in 504
 
 	#error if $bkindex is 0 but 500 or 504 "Includes" "index"
-	if (($bkindex == 0) && ($hasindexin500or504)) {
+	if (($bkindex eq 0) && ($hasindexin500or504)) {
 		push @warningstoreturn, ("008: Index is coded 0 but 500 or 504 mentions index.");
 	} #if $bkindex is 0 but 500 or 504 "Includes" "index"
 
@@ -1365,7 +1388,8 @@ sub check_041vs008lang {
 	#declaration of return array
 	my @warningstoreturn = ();
 
-	my $field008 = $record->field('008')->as_string();
+	my $field008 = $record->field('008')->as_string() if ($record->field('008'));
+	return \@warningstoreturn unless ($field008);
 	my $langcode008 = substr($field008,35,3);
 
 	#double check that lang code is present with 3 characters
@@ -1643,7 +1667,7 @@ sub video007vs300vs538 {
 		print "Problem getting first byte $fields007[0]" unless ($field007bytes[0] eq 'v');
 
 		#declare variables for later
-		my ($iscassette007, $isdisc007, $subfield300a, $subfield300b, $subfield300c, $viddiscin300, $vidcassettein300, $bw_only, $col_only, $col_and_bw, $dim300, $dvd538, $vhs538, $notdvd_or_vhs_in538);
+		my ($iscassette007, $isdisc007, $subfield300a, $subfield300b, $subfield300c, $viddiscin300, $vidcassettein300, $bw_only, $col_only, $col_and_bw, $dim300, $dvd538, $vhs538);
 
 		#check for byte 1 having 'd'--videodisc (DVD or VideoCD) and normal pattern
 		if ($field007bytes[1] eq 'd') {
@@ -1758,7 +1782,11 @@ sub video007vs300vs538 {
 ####################################
 #$viddiscin300, $vidcassettein300
 #$dim300
-##### modify unless statement if dimensions change
+		#if notdvd_or_vhs_in538  is 1, then no 538 has the proper terminology for the format
+		my $notdvd_or_vhs_in538 = 1; #declared and initialized here for later use
+
+		##### modify unless statement if dimensions change
+
 		if ($viddiscin300) {
 			push @warningstoreturn, ("300: Dimensions, $subfield300c, do not match SMD, $subfield300a.") unless ($dim300 eq '4.75');
 		}
@@ -1803,8 +1831,8 @@ sub video007vs300vs538 {
 		$notdvd_or_vhs_in538 = 0;
 		} #at least one 538 had VHS or DVD
 
-# if $notdvd_or_vhs_in538 is 1, then no 538 had VHS or DVD
-		elsif ($notdvd_or_vhs_in538 ==1) {
+		# if $notdvd_or_vhs_in538 is 1, then no 538 had VHS or DVD
+		elsif ($notdvd_or_vhs_in538 == 1) {
 			push @warningstoreturn, ("538: Does not indicate VHS or DVD.");
 		} #elsif 538 does not have VHS or DVD
 
@@ -3149,6 +3177,16 @@ sub validate008 {
 #########################################
 
 =head1 CHANGES/VERSION HISTORY
+
+Version 1.07: Updated Dec. 11-Feb. 2005. Released Feb. 13, 2005.
+
+ -check_double_periods() skips field 856, where multiple punctuation is possible for URIs.
+ -added code in check_internal_spaces() to account for spaces between angle brackets in open dates in field 260c.
+ -Updated various subs to verify that 008 exists (and quietly return if not. check_008 will report the error).
+ -Changed #! line, removed -w, replaced with use warnings.
+ -Added error message to check_bk008_vs_bibrefandindex($record) if 008 book
+ index byte is not 0 or 1. This will result in duplicate errors if check_008 is
+ also called on the record.
 
 Version 1.05 and 1.06: Updated Dec. 6-7. Released Dec. 6-7, 2004.
 

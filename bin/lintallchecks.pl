@@ -39,6 +39,8 @@ MARC::BBMARC (for interface--timing code)
 
 Improve interface, particularly file name input.
 
+For users of this script: Modify section on which errors not to report.
+
 =cut
 
 ###########################
@@ -122,9 +124,18 @@ while (my $record = $batch->next()) {
 	
 	#call MARC::Lintadditions (which also performs MARC::Lint checks)
 	$linter->check_record($record);
-	my $controlno =$record->field('001')->as_string();
-	my $titlea =$record->field('245')->subfield('a');
 
+	#get control number for error reporting
+	my $controlno =$record->field('001')->as_string() if $record->field('001');
+
+	my $titlea = $record->field('245')->subfield('a');
+
+	#if controlnumber doesn't exist, report as error and use title
+	unless ($controlno) {
+		push @haswarnings, "001: Control number field not found.";
+		$controlno = $titlea;
+	} #unless controlno was found
+	
 	# Retrieve errors that were found by Lint and Lintadditions
 	push @haswarnings, ($linter->warnings());
 

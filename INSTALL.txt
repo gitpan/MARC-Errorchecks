@@ -7,7 +7,6 @@ To install this module type the following:
    make test
    make install
 
-This is completely untested.
 I use MacPerl (5.8.0a2) and Win32 versions of Perl.
 I have no experience with automatic installations (the standard make process).
 If the above fails to install the module, please install manually:
