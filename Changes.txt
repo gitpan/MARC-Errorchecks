@@ -1,0 +1,74 @@
+Revision history for Perl extension MARC::Errorchecks.
+
+Version 1.03: Updated Aug. 30-Oct. 16, 2004. Released Oct. 17. First CPAN version.
+
+ -Moved subs to MARC::QBIerrorchecks
+ --check_003($record)
+ --check_CIP_for_stockno($record)
+ --check_082count($record)
+ -Fixed bug in check_5xxendingpunctuation for first 10 characters.
+ -Moved validate008() and parse008date() from MARC::BBMARC (to make MARC::Errorchecks more self-contained).
+ -Moved readcodedata() from BBMARC (used by validate008)
+ -Moved DATA from MARC::BBMARC for use in readcodedata() 
+ -Remove dependency on MARC::BBMARC
+ -Added duplicate comma check in check_double_periods($record)
+ -Misc. bug fixes
+ Planned (future versions):
+ -Account for undetermined dates in matchpubdates($record).
+ -Cleanup of validate008
+ --Standardization of error reporting
+ --Material specific byte checking (bytes 18-34) abstracted to allow 006 validation.
+
+ 
+Version 1.02: Updated Aug. 11-22, 2004. Released Aug. 22, 2004.
+
+ -Implemented VERSION (uncommented)
+ -Added check for presence of 040 (check_040present($record)).
+ -Added check for presence of 2 082s in full-level, 1 082 in CIP-level records (check_082count($record)).
+ -Added temporary (test) check for trailing punctuation in 240, 586, 440, 490, 246 (check_nonpunctendingfields($record))
+ --which should not end in punctuation except when the data ends in such.
+ -Added check_fieldlength($record) to report fields longer than 1870 bytes.
+ --This should be rewritten to use the length in the directory of the raw MARC.
+ -Fixed workaround in check_bk008_vs_bibrefandindex($record) (Thanks again to Rich Ackerman).
+ 
+Version 1.01: Updated July 20-Aug. 7, 2004. Released Aug. 8, 2004.
+
+ -Temporary (or not) workaround for check_bk008_vs_bibrefandindex($record) and bibliographies.
+ -Removed variables from some error messages and cleanup of messages.
+ -Code readability cleanup.
+ -Added subroutines:
+ --check_240ind1vs1xx($record)
+ --check_041vs008lang($record)
+ --check_5xxendingpunctuation($record)
+ --findfloatinghypens($record)
+ --video007vs300vs538($record)
+ --ldrvalidate($record)
+ --geogsubjvs043($record)
+ ---has list of exceptions (e.g. English-speaking countries)
+ --findemptysubfields($record)
+ -Changed subroutines:
+ --check_bk008_vs_300($record): 
+ ---added cross-checking for codes a, b, c, g (ill., map(s), port(s)., music)
+ ---added checking for 'p. ' or 'v. ' or 'leaves ' in subfield 'a'
+ ---added checking for 'cm.', 'mm.', 'in.' in subfield 'c'
+ --parse008vs300b
+ ---revised check for 'm', phono. (which QBI doesn't currently use)
+ --Added check in check_bk008_vs_bibrefandindex($record) for 'Includes index.' (or indexes) in 504
+ ---This has a workaround I would like to figure out how to fix
+ 
+Version 1.00 (update to 0.95): First release July 18, 2004.
+
+ -Fixed bugs causing check_003 and check_010 subroutines to fail (Thanks to Rich Ackerman)
+ -Added to documentation
+ -Misc. cleanup
+ -Added skip of 787 fields to check_internal_spaces
+ -Added subroutines:
+ --check_end_punct_300($record)
+ --check_bk008_vs_300($record)
+ ---parse008vs300b
+ --check_490vs8xx($record)
+ --check_245ind1vs1xx($record)
+ --matchpubdates($record)
+ --check_bk008_vs_bibrefandindex($record)
+
+Version 1 (original version (actually version 0.95)): First release, June 22, 2004
