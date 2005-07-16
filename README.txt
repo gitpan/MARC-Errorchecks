@@ -5,7 +5,7 @@ MARC::Errorchecks
 =head1 DESCRIPTION
 
 Module for storing MARC error-checking subroutines,
-based on MARC21, AACR2R, and LCRIs.
+based on MARC21, AACR2, and LCRIs.
 These are used to find errors not easily checked by
 the MARC::Lint and MARC::Lintadditions modules,
 such as those that cross field boundaries.

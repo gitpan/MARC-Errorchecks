@@ -13,7 +13,7 @@ Write separate test for 008 byte checking (with a variety of 008 strings).
 =cut
 
 use strict;
-use Test::More tests=>29;
+use Test::More tests=>30;
 
 BEGIN { use_ok( 'MARC::File::USMARC' ); }
 BEGIN { use_ok( 'MARC::Errorchecks' ); }
@@ -132,12 +132,12 @@ FROM_TEXT: {
 		q{245: has trailing spaces.},
 		q{250: has multiple consecutive periods that do not appear to be ellipses.},
 		#008 byte checking returned errors will change in future version
-		q{008: Bytes 0-5, Date entered has bad characters. Year entered is after 2006 or before 1980	Month entered is greater than 12 or is 00.},
-		q{008: Bytes 11-14 Date2, has bad characters.},
+		q{008: Bytes 0-5, Date entered has bad characters. Year entered (1974) is before 1980	Month entered is greater than 12 or is 00	Day entered is greater than 31 or is 00.},
+		q{008: Bytes 11-14, Date2 (1   ) should be blank for this date type (s).},
 		q{008: Bytes 15-17, Country of Publication (wis) is not valid.},
 		q{008: Bytes 35-37, Language (end) not valid.},
-		q{008: Byte 39, Cataloging source has bad characters.},
-		q{008: Byte 29, Books-Conference publication has bad characters.},
+		q{008: Byte 39, Cataloging source has bad characters (p).},
+		q{008: Byte 29, Books-Conference publication has bad characters (8).},
 		q{010: First digits of LCCN are 2008},
 		q{300: 4xx exists but 300 does not end with period.},
 		q{300: Check subfield _a for p. or v.},
@@ -153,7 +153,7 @@ FROM_TEXT: {
 		q{041: First code (spa) does not match 008 bytes 35-37 (Language end).},
 		q{504: Check ending punctuation, Includes i ___ udes index},
 		q{505: May have a floating hyphen, Test 1 -- },
-
+		q{040: Subfield a contains only space(s) or period(s) ( ).},
 #add more expected messages here
 #		q{},
 

@@ -15,5 +15,7 @@ Makefile.PL
 MANIFEST
 README.txt
 test.pl
+t/008errorchecks.t
+t/008errorchecks.t.pl
 t/Errorchecks.t
 t/Errorchecks.t.pl

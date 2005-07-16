@@ -1,5 +1,23 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.08: Updated Feb. 15-July 11, 2005. Released July 16, 2005.
+
+ -Updated MARC::Lint::CodeData with new and changed codes.
+ -Added 008errorchecks.t (and 008errorchecks.t.txt) tests for 008 validation
+ -Added check of current year, month, day vs. 008 creation date, reporting error if creation date appears to be later than local time. Assumes 008 dates of 00mmdd to 70mmdd represent post-2000 dates.
+ --This is a change from previous range, which gave dates as 00-06 as 200x, 80-99 as 19xx, and 07-79 as invalid. 
+ -Added _get_current_date() internal sub to assist with check of creation date vs. current date.
+ -findemptysubfields($record) also reports error if period(s) and/or space(s) are the only data in a subfield.
+ -Revised wording of error messages for validate008($field008, $mattype, $biblvl)
+ -Revised parse008date($field008string) error message wording and bug fix.
+ -Bug fix in video007vs300vs538($record) for gathering multiple 538 fields.
+ -added check in check_5xxendingpunctuation($record) for space-semicolon-space-period at the end of 5xx fields.
+ -added field count check for more than 50 fields to check_fieldlength($record)
+ -added 'webliography' as acceptable 'bibliographical references' term in check_bk008_vs_bibrefandindex($record), even though it is discouraged. Consider adding an error message indicating that the term should be 'bibliographical references'?
+ -Code indenting changed from tabs to 4 spaces per tab.
+ -Misc. bug fixes including changing '==' to 'eq' for tag numbers, bytes in 008, and indicators.
+
+
 Version 1.07: Updated Dec. 11-Feb. 2005. Released Feb. 13, 2005.
 
  -check_double_periods() skips field 856, where multiple punctuation is possible for URIs.
