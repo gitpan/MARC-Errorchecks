@@ -8,14 +8,11 @@ use warnings;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
 require Exporter;
-require AutoLoader;
 
-@ISA = qw(Exporter AutoLoader);
+@ISA = qw(Exporter);
 # Items to export into callers namespace by default. @EXPORT = qw();
 
-
-
-$VERSION = 1.08;
+$VERSION = 1.09;
 
 =head1 NAME
 
@@ -93,6 +90,8 @@ Add functionality.
  If not, optimize this and the Lintadditions.pm checks.
  Example: reduce number of repeated breaking-out of fields into subfield parts.
  So, subroutines that look for double spaces and double punctuation might be combined.
+
+Remove local practice code or facilitate its modification/customization.
 
 Deal with other TO DO items found below.
 This includes fixing problem of "bibliographical references" being required if 008 contents has 'b'.
@@ -450,10 +449,14 @@ Verifies 010 subfield 'a' has proper spacing.
 
 =head2 TO DO (check_010)
 
+Compare efficiency of getting current date vs. setting global current date. Determine best way to establish global date.
+
 Think about whether subfield 'z' needs proper spacing.
 
 Deal with non-digit characters in original 010a field.
 Currently these are simply reported and the space checking is skipped.
+
+Revise local treatment of LCCN checking (invalid 8-digits pre-1980) for more universal use.
 
 Maintain date ranges in checking validity of numbers.
 
@@ -471,14 +474,18 @@ sub check_010 {
     #declaration of return array
     my @warningstoreturn = ();
 
+    #set current year for validation of year portion of 10-digit LCCNs
+    my $current_date = _get_current_date();
+    my $current_year = substr($current_date, 0, 4);
+
 ##############################################
 ## Declare variables needed for each record ##
 ##############################################
 
     # $field_010 will have MARC::Field version of the 010 field of the record
-    my $field_010;
+    my $field_010 = '';
     #$cleaned010a will have the finished cleaned 010a data
-    my $cleaned010a;
+    my $cleaned010a = '';
 
     #skip records with no 010 and no 010$a
     unless (($record->field('010')) && ($record->field('010')->subfield('a'))) {return \@warningstoreturn;}
@@ -493,34 +500,45 @@ sub check_010 {
         my $subfielda = $field_010->subfield('a');
 
         #Get number portion of subfield
-        $subfielda =~ s/\D*(\d{8,10})\D*/$1/;
+        $subfielda =~ s/^\D*(\d{8,10})\b\D*.*$/$1/;
         #report error if 8-10 digit number was not found
-        unless ($1) {push @warningstoreturn, ("010: Could not find an 8-10 digit number in subfield 'a'.");}
+        unless ($1) {
+            push @warningstoreturn, ("010: Could not find an 8-10 digit number in subfield 'a'.");
+            #no need to continue processing 010a so return
+            return \@warningstoreturn;
+        } #unless 8-10 digit number found in 010a
 
 #######################################################
 # LCCN validity checks and setting of cleaned version # 
 #######################################################
         #check validity of resulting digits
         if ($subfielda =~ /^\d{8}$/) {
+
+=head2 local practice
+
+ #this section could be implemented to validate 8-digit LCCN being between a specific set of years (1900-1980, for example).
+
+ #code has been commented/podded out for general practice
             my $year = substr($subfielda, 0, 2);
             #should be old lccn, so first 2 digits are 00 or > 80
             #The 1980 limit is a local practice.
-            #Change the date ranges according to local needs (e.g. if LC records back to 1900 exist in the catalog, eliminate this section of the error check)
+            #Change the date ranges according to local needs (e.g. if LC records back to 1900 exist in the catalog, do not implement this section of the error check)
             if (($year >= 1) && ($year < 80)) {push @warningstoreturn, ("010: First digits of LCCN are $year.");}
-            #otherwise, 8 digit lccn needs 3 spaces before, 1 after, so put that in $cleaned010a
-            else {
+
+=cut
+
+            #8 digit lccn needs 3 spaces before, 1 after, so put that in $cleaned010a
+            #else year is valid
+            ##used in case local practice year validation is being done
                 $cleaned010a = "   $subfielda ";
-            } #else $subfielda has valid lccn
+            #end else if year check implemented
         } #if lccn is 8 digits
 
         #otherwise if $subfielda is 10 digits
         elsif ($subfielda =~ /^\d{10}$/) {
             my $year = substr($subfielda, 0, 4);
             # no valid 10 digit will be less than 2001
-#########################################
-# change upper limit as years progress
-#########################################
-            if (($year < 2001) || ($year > 2006)) {push @warningstoreturn, ("010: First digits of LCCN are $year");}
+            if (($year < 2001) || ($year > $current_year)) {push @warningstoreturn, ("010: First digits of LCCN are $year.");}
             #otherwise, 10 digit lccn needs 2 spaces before, 0 after, so put that in $cleaned010a
             else {
                 $cleaned010a = "  $subfielda";
@@ -528,7 +546,10 @@ sub check_010 {
         } #elsif lccn is 10 digits
 
         # lccn is not 8 or 10 digits so report error
-        else {push @warningstoreturn, ("010: LCCN subfield 'a' is not 8 or 10 digits");}
+        else {
+            #should have already returned but just in case,
+            push @warningstoreturn, ("010: LCCN subfield 'a' is not 8 or 10 digits");
+        } #else not 8-10 digits?
 
         #return if warnings have been found to this point
         if (@warningstoreturn) {return \@warningstoreturn;}
@@ -539,14 +560,22 @@ sub check_010 {
 
         #if original and cleaned match, go to next record
         if ($orig010a eq $cleaned010a) {return \@warningstoreturn;}
-
-        #if cleaned version does not match original, report this error
-        else {
-            #but only if $orig010a has no non-digitchars
-            if ($orig010a !~ /^[ \d]*$/) {push @warningstoreturn, ("010: Subfield 'a' has non-digits.");} #if non-digits
+        #elsif non-digits are present in 010a
+        elsif ($orig010a =~ /[^ 0-9]/) {
+            my $orig010a_lccn = $orig010a;
+            #get uncleaned numeric portion
+            $orig010a_lccn =~ s/^( *\d+ *).*/$1/;
+            #report error if non-digits are in number portion 
+            ##(shouldn't happen as should have returned above)
+            if ($subfielda !~ /^[ \d]*$/) {push @warningstoreturn, ("010: Subfield 'a' has non-digits ($orig010a).");} #if non-digits
+            elsif ($orig010a_lccn eq $cleaned010a) {return \@warningstoreturn;}
             else {
-                push @warningstoreturn, ("010: Subfield 'a' has improper spacing.");
+                push @warningstoreturn, ("010: Subfield 'a' has improper spacing ($orig010a).");
             } #else improper spacing
+        } #elsif non-digits in 010a
+        else {
+            push @warningstoreturn, ("010: Subfield 'a' has improper spacing ($orig010a).");
+
         } #else original and cleaned 010 do not match
     } # else record has 010subfielda
 
@@ -1150,7 +1179,7 @@ sub matchpubdates {
         last if @warningstoreturn;
     } # while  @dates050 has more than 1 date
 
-    my $date050;
+    my $date050 = '';
 
     #if successful, only one date will remain and @warningstoreturn will not have an 050 error
     if (($#dates050 == 0) && ((join "\t", @warningstoreturn) !~ /Dates do not match in each of the 050s/)) {
@@ -1182,7 +1211,7 @@ sub matchpubdates {
         #unshift (@newsubfields, $code, $data);
     } # while
 
-    my $date260;
+    my $date260 = '';
 
     #extract 4 digit date portion
     # account for [i.e. [date]]
@@ -2427,6 +2456,10 @@ Relies upon internal _get_current_date().
  else {last;}
  }
 
+=head2 TODO parse008date
+
+Remove local practice or revise for easier updating/customization.
+
 =cut
 
 sub parse008date {
@@ -2459,7 +2492,7 @@ sub parse008date {
 
         #complain if creation year is before 1980
         ###This is a local practice check. Customize according to local needs. ###
-        elsif ($yearentered <= 1980) {
+        elsif ($yearentered < 1980) {
             $hasbadchars .= "Year entered ($yearentered) is before 1980\t";
         } #if date is less than or equal to 1980
         #validate month portion
@@ -3237,7 +3270,7 @@ sub validate008 {
 
 Internal sub for use with validate008($field008, $mattype, $biblvl) (actually with parse008date($field008string)). Returns the current year-month-day, in the form yyyymmdd.
 
-
+Also used by check_010($record).
 
 =cut
 
@@ -3263,6 +3296,17 @@ sub _get_current_date {
 #########################################
 
 =head1 CHANGES/VERSION HISTORY
+
+Version 1.09: Updated July 18, 2005. Released July 19, 2005 (Aug. 14, 2005 to CPAN).
+
+ -Added check_010.t (and check_010.t.pl) tests for check_010($record).
+ -check_010($record) revisions.
+ --Turned off validation of 8-digit LCCN years. Code commented-out.
+ --Modified parsing of numbers to check spacing for 010a with valid non-digits after valid numbers.
+ --Validation of 10-digit LCCN years is based on current year.
+ -Fixed bug of uninitialized values for matchpubdates($record) 050 and 260 dates.
+ -Corrected comparison for year entered < 1980.
+ -Removed AutoLoader (which was a remnant of the initial module creation process)
 
 Version 1.08: Updated Feb. 15-July 11, 2005. Released July 16, 2005.
 

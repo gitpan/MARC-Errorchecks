@@ -1,5 +1,16 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.09: Updated July 18, 2005. Released July 19, 2005.
+
+ -Added check_010.t (and check_010.t.pl) tests for check_010($record).
+ -check_010($record) revisions.
+ --Turned off validation of 8-digit LCCN years. Code commented-out.
+ --Modified parsing of numbers to check spacing for 010a with valid non-digits after valid numbers.
+ --Validation of 10-digit LCCN years is based on current year.
+ -Fixed bug of uninitialized values for matchpubdates($record) 050 and 260 dates.
+ -Corrected comparison for year entered < 1980.
+ -Removed AutoLoader (which was a remnant of the initial module creation process)
+
 Version 1.08: Updated Feb. 15-July 11, 2005. Released July 16, 2005.
 
  -Updated MARC::Lint::CodeData with new and changed codes.

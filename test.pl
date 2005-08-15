@@ -14,7 +14,7 @@ print "ok 1--MARC::Errorchecks loaded\n";
 
 ######################### End of black magic.
 
-print "Please run: t/008errorchecks.t.pl and t/Errorchecks.t\n";
+print "Please run: t/008errorchecks.t.pl, t/check_010.t, and t/Errorchecks.t\n";
 
 print "Press Enter to quit";
 <>;

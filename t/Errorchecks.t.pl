@@ -8,7 +8,6 @@ Currently, performs semi-random testing of some of the subroutines in MARC::Erro
 =head1 TO DO
 
 Devise checks for each subroutine individually.
-Write separate test for 008 byte checking (with a variety of 008 strings).
 
 =cut
 
@@ -138,7 +137,7 @@ FROM_TEXT: {
 		q{008: Bytes 35-37, Language (end) not valid.},
 		q{008: Byte 39, Cataloging source has bad characters (p).},
 		q{008: Byte 29, Books-Conference publication has bad characters (8).},
-		q{010: First digits of LCCN are 2008},
+		q{010: First digits of LCCN are 2008.},
 		q{300: 4xx exists but 300 does not end with period.},
 		q{300: Check subfield _a for p. or v.},
 		q{300: Check subfield _c for cm., mm. or in.},

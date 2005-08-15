@@ -9,9 +9,8 @@
 =cut
 
 use strict;
-use Test::More tests=>73;
+use Test::More tests=>72;
 
-BEGIN { use_ok( 'MARC::File::USMARC' ); }
 BEGIN { use_ok( 'MARC::Errorchecks' ); }
 print "MARC::Errorchecks version $MARC::Errorchecks::VERSION\n";
 
@@ -335,5 +334,3 @@ is (scalar @mattypes, scalar @bad008s, 'Correct number of material types and 008
 #####
 
 
-#print "Press Enter to quit";
-#<>;
