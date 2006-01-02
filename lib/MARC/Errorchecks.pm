@@ -12,16 +12,16 @@ require Exporter;
 @ISA = qw(Exporter);
 # Items to export into callers namespace by default. @EXPORT = qw();
 
-$VERSION = 1.09;
+$VERSION = 1.10;
 
 =head1 NAME
 
-MARC::Errorchecks
+MARC::Errorchecks -- Collection of MARC 21/AACR2 error checks
 
 =head1 DESCRIPTION
 
-Module for storing MARC error-checking subroutines,
-based on MARC21, AACR2, and LCRIs.
+Module for storing MARC error checking subroutines,
+based on MARC 21, AACR2, and LCRIs.
 These are used to find errors not easily checked by
 the MARC::Lint and MARC::Lintadditions modules,
 such as those that cross field boundaries.
@@ -156,7 +156,9 @@ sub check_all_subs {
 
     push @errorstoreturn, (@{check_5xxendingpunctuation($record)});
 
-    push @errorstoreturn, (@{findfloatinghypens($record)});
+    push @errorstoreturn, (@{findfloatinghyphens($record)});
+
+    push @errorstoreturn, (@{check_floating_punctuation($record)});
 
     push @errorstoreturn, (@{video007vs300vs538($record)});
 
@@ -171,6 +173,8 @@ sub check_all_subs {
     push @errorstoreturn, (@{check_nonpunctendingfields($record)});
 
     push @errorstoreturn, (@{check_fieldlength($record)});
+
+
 
 ## add more here ##
 ##push @errorstoreturn, (@{});
@@ -751,10 +755,13 @@ sub check_bk008_vs_300 {
 ### 300 subfield 'a' and 'c' checks ###
 #######################################
 
-            #Check for 'p.' or 'v.' or leaves in subfield 'a'
+            #Check for 'p.' or 'v.' or leaves in subfield 'a' unless electronic resource
             if ($subfielda) {
-                push @warningstoreturn, ("300: Check subfield _a for p. or v.") unless (($subfielda =~  /\(?.*\b[pv]\.[,\) ]?/)||($subfielda =~/ leaves / && ($subfielda !~ / leaves of plates/)));
-            }
+                push @warningstoreturn, ("300: Check subfield _a for p. or v.") unless (
+                    ($subfielda =~  /\(?.*\b[pv]\.[,\) ]?/) ||
+                    ($subfielda =~/ leaves / && ($subfielda !~ / leaves of plates/)) ||
+                    (($record->subfield('245', 'h') && ($record->subfield('245', 'h') =~ /\[electronic resource\]/))));
+            } #if 300 subfielda exists
             #report missing subfield a
             else {
                 push @warningstoreturn, ("300: Subfield _a is not present.");
@@ -1098,7 +1105,7 @@ Relies upon 260$c date being the first date in the last 260$c subfield.
 
 Has problem finding 050 date if it is not last set of digits in 050$b.
 
-Process of getting 008date1 duplicates similar check in C<validate_008> subroutine.
+Process of getting 008date1 duplicates similar check in C<validate008> subroutine.
 
 =head2 TO DO
 
@@ -1404,6 +1411,14 @@ push @warningstoreturn, ("008: Coded 'b' but 504 (or 500) does not mention 'bibl
         push @warningstoreturn, ("008: Not coded 'b' but 504 (or 500) mentions 'bibliographical references'.");
     } # if 008cont 'b' but not 504 or 500 with bib refs
 
+    #check for 'p.' if pagination is present with bibliographical references
+    foreach my $bibref (@bibrefsin504) {
+        if ($bibref =~ /bibliographical references \((?!p\. ).*?\)?/) {
+            unless ($bibref =~ /bibliographical references \(t\.p\. .*?\)?/) {
+                push @warningstoreturn, ("504: Pagination may need 'p.' ($bibref).");
+            } #unless 't.p. ' is page (including t.p. verso)
+        } #if 'p.' is not present in 504 with bib. ref. pagination
+    } #foreach 504 field with bib. refs
     return \@warningstoreturn;
  
 } # check_bk008_vs_bibrefandindex
@@ -1469,7 +1484,7 @@ sub check_041vs008lang {
 
 Validates punctuation in various 5xx fields.
 
-Currently checks 500, 501, 504, 508, 511, 538, 546.
+Currently checks 500, 501, 504, 505, 508, 511, 538, 546.
 
 For 586, see check_nonpunctendingfields($record)
 
@@ -1477,7 +1492,7 @@ For 586, see check_nonpunctendingfields($record)
 
 Add checks for the other 5xx fields. 
 
-Verify rules for these checks.
+Verify rules for these checks (particularly 505).
 
 =cut
 
@@ -1497,7 +1512,7 @@ sub check_5xxendingpunctuation {
         $isCIP = 1;
     }
     # check only certain fields
-    my @fieldstocheck = ('500', '501', '504', '520', '538', '546', '508', '511');
+    my @fieldstocheck = ('500', '501', '504', '505', '520', '538', '546', '508', '511');
 
     #get fields in @fieldstocheck
     my @fields5xx = $record->field(@fieldstocheck);
@@ -1508,8 +1523,8 @@ sub check_5xxendingpunctuation {
         my $tag = $field5xx->tag();
         #skip 500s with LCCN or ISBN in PCIP
         if (($isCIP) && ($tag eq '500') && ($field5xx->subfield('a') =~ /^(LCCN)|(ISBN)|(Preassigned)/)) {
-        return \@warningstoreturn;
-        }
+            return \@warningstoreturn;
+        } #if CIP with 'LCCN' or 'ISBN' note
 
         else {
             #look at last subfield (unless numeric)
@@ -1522,34 +1537,44 @@ sub check_5xxendingpunctuation {
                 # skip numeric subfields (5)
                 next if ($code =~ /^\d$/);
 
+                #get the first 10 and last 10 characters of the field for error reporting
+                my ($firstchars, $lastchars) = ('', '');
+                if (length($data) < 10) {
+                    #get full subfield if length < 10)
+                    $firstchars = $data;
+                    #get full subfield if length < 10)
+                    $lastchars = $data;
+                } #if subfield length < 10
+                elsif (length($data) >= 10) {
+                    #get first 10 chars of subfield
+                    $firstchars = substr($data,0,10);
+                    #get last 10 chars of subfield
+                    $lastchars = substr($data,(length($data)-10),(length($data)));
+                } #elsif subfield length >= 10
+
 # valid punctuation: /(\)?[\!\?\.]\'?\"?$)/
 # so, closing parens (or not), 
-#either exclamation point, question mark or period,
-#and, optionally, single and/or double quote
-
-            #get the first 10 and last 10 characters of the field for error reporting
-            my ($firstchars, $lastchars) = ('', '');
-            if (length($data) < 10) {
-                #get full subfield if length < 10)
-                $firstchars = $data;
-                #get full subfield if length < 10)
-                $lastchars = $data;
-            } #if subfield length < 10
-            elsif (length($data) >= 10) {
-                #get first 10 chars of subfield
-                $firstchars = substr($data,0,10);
-                #get last 10 chars of subfield
-                $lastchars = substr($data,(length($data)-10),(length($data)));
-            } #elsif subfield length >= 10
-
+# either exclamation point, question mark or period,
+# and, optionally, single and/or double quote
 
                 unless ($data =~ /(\)?[\!\?\.]\'?\"?$)/) {
-                    push @warningstoreturn, join '', ($tag, ": Check ending punctuation, ",  $firstchars, " ___ ", $lastchars);
-                }
+                    if ($tag eq '505') {
+                        #ignore error--505 may be unpunctuated
+                    } #if 505
+                    else {
+                        push @warningstoreturn, join '', ($tag, ": Check ending punctuation, ",  $firstchars, " ___ ", $lastchars);
+                    } #else not 505
+                } #unless valid ending punctuation
+
+                #report error for floating or non-floating semi-colon-period
                 push @warningstoreturn, join '', ($tag, ": Check ending punctuation, ",  $firstchars, " ___ ", $lastchars) if ($data =~ /\s*;\s*\.$/);
-        # stop after first non-numeric
+
+                #report error for exclamation point or question mark-period
+                push @warningstoreturn, join '', ($tag, ": Check ending punctuation (exclamation point or question mark should not be followed by period), ",  $firstchars, " ___ ", $lastchars) if ($data =~ /(\)?[\!\?]\.\'?\"?$)/);
+                
+                # stop after first non-numeric
                 last;
-            } # while
+            } # while subfields
         } # else tag is checkable
         
     } # foreach 5xx field
@@ -1564,17 +1589,17 @@ sub check_5xxendingpunctuation {
 #########################################
 #########################################
 
-=head2 findfloatinghypens($record)
+=head2 findfloatinghyphens($record)
 
 Looks at various fields and reports fields with space-hypen-space as errors.
 
-=head2 TO DO (findfloatinghypens($record))
+=head2 TO DO (findfloatinghyphens($record))
 
 Find exceptions.
 
 =cut
 
-sub findfloatinghypens {
+sub findfloatinghyphens {
 
     #get passed MARC::Record object
     my $record = shift;
@@ -1591,15 +1616,91 @@ sub findfloatinghypens {
             #get field as a string, without subfield coding
             my $fielddata = $checkedfield->as_string();
             #report error if space-hyphen-space appears in field
-            if ($fielddata =~ / \- /) {
-                push @warningstoreturn, join '', ($checkedfield->tag(), ": May have a floating hyphen, ",  substr($fielddata,0,(10||length($fielddata))));
-            }
+            ##reporting surrounding 10 chars on either side
+            if (my @floating_hyphens = ($fielddata =~ /(.{0,10} \- .{0,10})/g)) {
+                push @warningstoreturn, join '', ($checkedfield->tag(), ": May have a floating hyphen, ", (join '_', @floating_hyphens) ); 
+            } #if floating hyphen
         } #foreach $checkedfield
     } #foreach $fieldtocheck
 
     return \@warningstoreturn;
 
-} # findfloatinghypens
+} # findfloatinghyphens
+
+#########################################
+#########################################
+#########################################
+#########################################
+
+=head2 check_floating_punctuation($record)
+
+ Looks at each non-control tag and reports an error if a floating period, comma, or question mark are found.
+
+Example: 
+
+    245 _aThis has a floating period .
+
+Ignores double dash-space when preceded by a non-space (example-- [where functioning as ellipsis replacement])
+
+=head2 TODO (check_floating_punctuation($record))
+
+ -Add other undesirable floating punctuation.
+
+ -Look for exceptions where floating punctuation should be allowed.
+
+ -Merge functionality with findfloatinghyphens($record) (to reduce number of runs through the same record, especially).
+
+ -Improve reporting. Current version reports approximately 10 characters before and after the floating text for fields longer than 80 characters, or the full field otherwise, to provide context, particularly in the case of multiple instances.
+ 
+=cut
+
+sub check_floating_punctuation {
+
+    #get passed MARC::Record object
+    my $record = shift;
+    #declaration of return array
+    my @warningstoreturn = ();
+
+    #create hash of punctuation wording
+    my %punct_words = (
+        ',' => 'comma',
+        '.' => 'period',
+        '?' => 'question mark',
+    );
+
+    #look at each field in record
+    foreach my $field ($record->fields()) {
+        my $tag = $field->tag();
+        #skip non-numeric tags
+        next unless ($tag =~ /^[0-9][0-9][0-9]$/);
+        #skip control fields and LCCN (010)
+        next if ($tag <= 10);
+
+        #break field into string of characters without subfield codes
+        my $field_string = $field->as_string();
+
+        #if period, comma, question mark are preceded by space and followed
+        #by space or end of field, report error
+        #except when preceded by ellipsis-replacement dash
+        if ($field_string =~ /(?:(?![^ ]--)...) ([\.\,\?])(?: |$)/) {
+            my $punct = $1;
+            my $punctuation = ($punct_words{$punct} or 'punctuation mark');
+            my @surrounding_text = ($field_string =~ /(.{0,10}(?![^ ]--)... [\.\,\?] ?.{0,10})/g);
+            $punctuation = "punctuation marks" if (scalar @surrounding_text > 1);
+            my $warning_text = join '', ($tag, ": May have floating $punctuation ");
+            #add surrounding characters if field is longer than 80 chars
+            $warning_text .= "\(".(length($field_string) > 80 ? join "_", substr($field_string, 0, 15), @surrounding_text : $field_string)."\).";
+
+            push @warningstoreturn, $warning_text;
+        } #if floating punctuation
+        
+    } #foreach field in record
+    
+    return \@warningstoreturn;
+
+} #check_floating_punctuation
+
+
 
 #########################################
 #########################################
@@ -2228,6 +2329,8 @@ sub check_040present {
 Checks for presence of punctuation in the fields listed below.
 These fields are not supposed to end in punctuation unless the data ends in abbreviation, ___, or punctuation.
 
+Ignores initialisms such as 'Q.E.D.' Certain abbrevations and initialisms are explicitly coded.
+
 Fields checked: 240, 246, 440, 490, 586.
 
 =head2 TO DO (check_nonpunctendingfields)
@@ -2315,9 +2418,9 @@ sub check_nonpunctendingfields {
                 #get last words of subfield
                 my @lastwords = split ' ', $data;
                 #see if last word is a known exception
-                unless ($abbexceptions{$lastwords[-1]}) {
+                unless ($abbexceptions{$lastwords[-1]} || ($lastwords[-1] =~ /(?:(?:\b|\W)[a-zA-Z]\.)$/)) {
 
-                    push @warningstoreturn, join '', ($field->tag(), ": Check ending punctuation (not normally added for this field), ", $firstchars, " ___ ",$lastchars);
+                    push @warningstoreturn, join '', ($field->tag(), ": Check ending punctuation (not normally added for this field), ", $firstchars, " ___ ", $lastchars);
                 }
             }
             # stop after first non-numeric
@@ -2557,12 +2660,7 @@ Checks LDR/07 for 's' for serials before checking material specific bytes.
 
 Character positions 00-17 and 35-39 are defined the same across all types of material, with special consideration for position 06. 
 
-Steps in validation code for format specific positions:
-
- 1. add hash key and value pair for byte position(s)
- 2. verify each byte against list of valid codes
- 3. add valid characters as individual positions of cleaned array
- 4. add any error to scalar containing tabbed errors
+Current version implements material specific validation through internal subs for each material type. Those internal subs allow for checking either 006 or 008 material specific bytes.
 
 
 =head2 Synopsis
@@ -2590,8 +2688,6 @@ print join "\t", @warningsfrom008, "\n";
 
  Determine proper values for date type 'e'.
 
-
- Separate byte 18-34 checking so the same code can be used for 006 byte checking.
 
 =head2 SKIP CODE for SERIALS
 
@@ -2783,6 +2879,100 @@ sub validate008 {
         push @warningstoreturn, ("008: Byte 39, Cataloging source has bad characters ($field008hash{catsource}).");
     } #unless Cataloging source is valid
 
+    ######################################
+    ### Material Specific Bytes, 18-34 ###
+    ######################################
+    ##### checked via internal subs ######
+    ######################################
+
+    my $material_specific_bytes = substr($field008,18, 17);
+
+
+    ### Check continuing resources (serials) ###
+    if ($biblvl =~ /^[s]$/) {
+        my @warnings_returned = _check_cont_res_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 008 rather than 006
+            @warnings_returned = _reword_008(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #continuing resources (serials)
+
+    #books
+    elsif ($mattype =~ /^[at]$/) {
+        my @warnings_returned = _check_book_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 008 rather than 006
+            @warnings_returned = _reword_008(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #books
+
+    #electronic resources/computer files
+    elsif ($mattype =~ /^[m]$/) {
+        my @warnings_returned = _check_electronic_resources_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 008 rather than 006
+            @warnings_returned = _reword_008(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #electronic resources
+    
+    #cartographic materials/maps
+    elsif ($mattype =~ /^[ef]$/) {
+        my @warnings_returned = _check_cartographic_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 008 rather than 006
+            @warnings_returned = _reword_008(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #cartographic
+    
+    #music and sound recordings
+    elsif ($mattype =~ /^[cdij]$/) {
+        my @warnings_returned = _check_music_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 008 rather than 006
+            @warnings_returned = _reword_008(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #music/sound recordings
+
+    #visual materials
+    elsif ($mattype =~ /^[gkor]$/) {
+        my @warnings_returned = _check_visual_material_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 008 rather than 006
+            @warnings_returned = _reword_008(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #visual materials
+
+    #mixed materials
+    elsif ($mattype =~ /^[p]$/) {
+        my @warnings_returned = _check_mixed_material_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 008 rather than 006
+            @warnings_returned = _reword_008(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #mixed materials
+
+
+    return (\@warningstoreturn);
+
+} #validate008
+    
+=head2 _check_cont_res_bytes($mattype, $biblvl, $bytes)
+
+ Internal sub to check 008 bytes 18-34 or 006 bytes 01-17 for Continuing Resources.
+
+ Receives material type, bibliographic level, and a 17-byte string to be validated. The bytes should be bytes 18-34 of the 008, or bytes 01-17 of the 006.
+
+=cut
+
+sub _check_cont_res_bytes {
+
     ########################################
     ########################################
     ########################################
@@ -2791,88 +2981,116 @@ sub validate008 {
     ########################################
     ########################################
 
+    my $mattype = shift;
+    my $biblvl = shift;
+    my $material_specific_bytes = shift;
+
+    my %bytehash = ();
+    my @warningstoreturn = ();
+
     ### Check continuing resources (serials) ###
     if ($biblvl =~ /^[s]$/) {
 
-        # Frequency (byte[18])
-        $field008hash{frequency} = substr($field008,18,1);
-        unless ($field008hash{frequency} =~ /^[abcdefghijkmqstuwz|\s]$/) {
-            push @warningstoreturn, ("008: Byte 18, Continuing resources-Frequency has bad characters ($field008hash{frequency}).");
+        # Frequency (byte[18/1])
+        $bytehash{frequency} = substr($material_specific_bytes, 0, 1);
+        unless ($bytehash{frequency} =~ /^[abcdefghijkmqstuwz|\s]$/) {
+            push @warningstoreturn, ("008: Byte 18 (006/01), Continuing resources-Frequency has bad characters ($bytehash{frequency}).");
         } #Continuing resources 18
 
-        # Regularity (byte[19])
-        $field008hash{regularity} = substr($field008,19,1);
-        unless ($field008hash{regularity} =~ /^[nrux|]$/) {
-            push @warningstoreturn, ("008: Byte 19, Continuing resources-Regularity has bad characters ($field008hash{regularity}).");
+        # Regularity (byte[19/2])
+        $bytehash{regularity} = substr($material_specific_bytes, 1, 1);
+        unless ($bytehash{regularity} =~ /^[nrux|]$/) {
+            push @warningstoreturn, ("008: Byte 19 (006/02), Continuing resources-Regularity has bad characters ($bytehash{regularity}).");
         } #Continuing resources 19
 
-        #ISSN center (byte[20])
-        $field008hash{issncenter} = substr($field008,20,1);
-        unless ($field008hash{issncenter} =~ /^[0124z|\s]$/) {
-            push @warningstoreturn, ("008: Byte 20, Continuing resources-ISSN center has bad characters ($field008hash{issncenter}).")
+        #Undefined (was ISSN Center) (byte[20/3])
+        $bytehash{contresundef20} = substr($material_specific_bytes, 2, 1);
+        unless ($bytehash{contresundef20} =~ /^[|\s]$/) {
+            push @warningstoreturn, ("008: Byte 20 (006/03), Continuing resources-Undef20 has bad characters ($bytehash{contresundef20}).")
         } #Continuing resources 20
 
-        #Type of continuing resource (byte[21])
-        $field008hash{typeofcontres} = substr($field008,21,1);
-        unless ($field008hash{typeofcontres} =~ /^[dlmnpw|\s]$/) {
-            push @warningstoreturn, ("008: Byte 21, Continuing resources-Type of continuing resource has bad characters ($field008hash{typeofcontres}).");
+        #Type of continuing resource (byte[21/4])
+        $bytehash{typeofcontres} = substr($material_specific_bytes, 3, 1);
+        unless ($bytehash{typeofcontres} =~ /^[dlmnpw|\s]$/) {
+            push @warningstoreturn, ("008: Byte 21 (006/04), Continuing resources-Type of continuing resource has bad characters ($bytehash{typeofcontres}).");
         } #Continuing resources 21
 
-        #Form of original item (byte[22])
-        $field008hash{formoforig} = substr($field008,22,1);
-        unless ($field008hash{formoforig} =~ /^[abcdefs\s]$/) {
-            push @warningstoreturn, ("008: Byte 22, Continuing resources-Form of original has bad characters ($field008hash{formoforig}).");
+        #Form of original item (byte[22/5])
+        $bytehash{formoforig} = substr($material_specific_bytes, 4, 1);
+        unless ($bytehash{formoforig} =~ /^[abcdefs\s]$/) {
+            push @warningstoreturn, ("008: Byte 22 (006/05), Continuing resources-Form of original has bad characters ($bytehash{formoforig}).");
         } #Continuing resources 22
 
-        #Form of item (byte[23])
-        $field008hash{formofitem} = substr($field008,23,1);
-        unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
-            push @warningstoreturn, ("008: Byte 23, Continuing resources-Form of item has bad characters ($field008hash{formofitem}).");
+        #Form of item (byte[23/6])
+        $bytehash{formofitem} = substr($material_specific_bytes, 5, 1);
+        unless ($bytehash{formofitem} =~ /^[abcdfrs|\s]$/) {
+            push @warningstoreturn, ("008: Byte 23 (006/06), Continuing resources-Form of item has bad characters ($bytehash{formofitem}).");
         } #Continuing resources 23
 
-        #Nature of entire work (byte[24])
-        $field008hash{natureofwk} = substr($field008,24,1);
-        unless ($field008hash{natureofwk} =~ /^[abcdefghiklmnopqrstuvwz|\s]$/) {
-            push @warningstoreturn, ("008: Byte 24, Continuing resources-Nature of work has bad characters ($field008hash{natureofwk}).");
+        #Nature of entire work (byte[24/7])
+        $bytehash{natureofwk} = substr($material_specific_bytes, 6, 1);
+        unless ($bytehash{natureofwk} =~ /^[abcdefghiklmnopqrstuvwz|\s]$/) {
+            push @warningstoreturn, ("008: Byte 24 (006/07), Continuing resources-Nature of work has bad characters ($bytehash{natureofwk}).");
         } #Continuing resources 24
 
-        #Nature of contents (byte[25]-[27])
-        $field008hash{contrescontents} = substr($field008,25,3);
-        unless ($field008hash{contrescontents} =~ /^[abcdefghiklmnopqrstuvwz|\s]{3}$/) {
-            push @warningstoreturn, ("008: Bytes 25-27, Continuing resources-Contents has bad characters ($field008hash{contrescontents}).");
+        #Nature of contents (byte[25/8]-[27/10])
+        $bytehash{contrescontents} = substr($material_specific_bytes, 7, 3);
+        unless ($bytehash{contrescontents} =~ /^[abcdefghiklmnopqrstuvwz|\s]{3}$/) {
+            push @warningstoreturn, ("008: Bytes 25-27 (006/08-10), Continuing resources-Contents has bad characters ($bytehash{contrescontents}).");
         } #Continuing resources 25-27
 
-        #Government publication (byte[28])
-        $field008hash{govtpub} = substr($field008,28,1);
-        unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
-            push @warningstoreturn, ("008: Byte 28, Continuing resources-Govt publication has bad characters ($field008hash{govtpub}).");
+        #Government publication (byte[28/11])
+        $bytehash{govtpub} = substr($material_specific_bytes, 10, 1);
+        unless ($bytehash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+            push @warningstoreturn, ("008: Byte 28 (006/11), Continuing resources-Govt publication has bad characters ($bytehash{govtpub}).");
         } #Continuing resources 28
 
-        #Conference publication (byte[29])
-        $field008hash{confpub} = substr($field008,29,1);
-        unless ($field008hash{confpub} =~ /^[01|]$/) {
-            push @warningstoreturn, ("008: Byte 29, Continuing resources-Conference publication has bad characters ($field008hash{confpub}).");
+        #Conference publication (byte[29/12])
+        $bytehash{confpub} = substr($material_specific_bytes, 11, 1);
+        unless ($bytehash{confpub} =~ /^[01|]$/) {
+            push @warningstoreturn, ("008: Byte 29 (006/12), Continuing resources-Conference publication has bad characters ($bytehash{confpub}).");
         } #Continuing resources 29
 
-        #Undefined (byte[30]-[32])
-        $field008hash{contresundef30to32} = substr($field008,30,3);
-        unless ($field008hash{contresundef30to32} =~ /^[|\s]{3}$/) {
-            push @warningstoreturn, ("008: Bytes 30-32, Continuing resources-Undef30to32 has bad characters ($field008hash{contresundef30to32}).");
+        #Undefined (byte[30/13]-[32/15])
+        $bytehash{contresundef30to32} = substr($material_specific_bytes, 12, 3);
+        unless ($bytehash{contresundef30to32} =~ /^[|\s]{3}$/) {
+            push @warningstoreturn, ("008: Bytes 30-32 (006/13-15), Continuing resources-Undef30to32 has bad characters ($bytehash{contresundef30to32}).");
         } #Continuing resources 30-32 
 
-        #Original alphabet or script of title (byte[33])
-        $field008hash{origalphabet} = substr($field008,33,1);
-        unless ($field008hash{origalphabet} =~ /^[abcdefghijkluz|\s]$/) {
-            push @warningstoreturn, ("008: Byte 33, Continuing resources-Original alphabet has bad characters ($field008hash{origalphabet}).");
+        #Original alphabet or script of title (byte[33/16])
+        $bytehash{origalphabet} = substr($material_specific_bytes, 13, 1);
+        unless ($bytehash{origalphabet} =~ /^[abcdefghijkluz|\s]$/) {
+            push @warningstoreturn, ("008: Byte 33 (006/16), Continuing resources-Original alphabet has bad characters ($bytehash{origalphabet}).");
         } #Continuing resources 33
 
-        #Entry convention (byte[34])
-        $field008hash{entryconvention} = substr($field008,34,1);
-        unless ($field008hash{entryconvention} =~ /^[012|]$/) {
-            push @warningstoreturn, ("008: Byte 34, Continuing resources-Entry convention has bad characters ($field008hash{entryconvention}).");
+        #Entry convention (byte[34/17])
+        $bytehash{entryconvention} = substr($material_specific_bytes, 16, 1);
+        unless ($bytehash{entryconvention} =~ /^[012|]$/) {
+            push @warningstoreturn, ("008: Byte 34 (006/17), Continuing resources-Entry convention has bad characters ($bytehash{entryconvention}).");
         } #Continuing resources 34
 
-    } # Continuing Resources
+    } # Continuing Resources (biblvl 's')
+    
+    return @warningstoreturn;
+
+} # _check_cont_res_bytes
+
+=head2 _check_book_bytes($mattype, $biblvl, $bytes)
+
+ Internal sub to check 008 bytes 18-34 or 006 bytes 01-17 for Books.
+
+ Receives material type, bibliographic level, and a 17-byte string to be validated. The bytes should be bytes 18-34 of the 008, or bytes 01-17 of the 006.
+
+=cut
+
+sub _check_book_bytes {
+
+    my $mattype = shift;
+    my $biblvl = shift;
+    my $material_specific_bytes = shift;
+
+    my %bytehash = ();
+    my @warningstoreturn = ();
 
     ########################################
     ########################################
@@ -2883,75 +3101,96 @@ sub validate008 {
     ########################################
 
 
-    elsif ($mattype =~ /^[at]$/) {
+    if ($mattype =~ /^[at]$/) {
 
-        # Illustrations (byte [18]-[21])
-        $field008hash{illustrations} = substr($field008,18,4);
-        unless ($field008hash{illustrations} =~ /^[abcdefghijklmop|\s]{4}$/) {
-            push @warningstoreturn, ("008: Bytes 18-21, Books-Illustrations has bad characters ($field008hash{illustrations}).");
+        # Illustrations (byte [18/1]-[21/4])
+        $bytehash{illustrations} = substr($material_specific_bytes, 0, 4);
+        unless ($bytehash{illustrations} =~ /^[abcdefghijklmop|\s]{4}$/) {
+            push @warningstoreturn, ("008: Bytes 18-21 (006/01-04), Books-Illustrations has bad characters ($bytehash{illustrations}).");
         } #Books-18-21
 
-        # Target audience (byte 22)
-        $field008hash{audience} = substr($field008,22,1);
-        unless ($field008hash{audience} =~ /^[abcdefgj|\s]$/) {
-            push @warningstoreturn, ("008: Byte 22, Books-Audience has bad characters ($field008hash{audience}).")
+        # Target audience (byte 22/5)
+        $bytehash{audience} = substr($material_specific_bytes, 4, 1);
+        unless ($bytehash{audience} =~ /^[abcdefgj|\s]$/) {
+            push @warningstoreturn, ("008: Byte 22 (006/05), Books-Audience has bad characters ($bytehash{audience}).")
         } #Books 22
 
-        # Form of item (byte 23)
-        $field008hash{formofitem} = substr($field008,23,1);
-        unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
-            push @warningstoreturn, ("008: Byte 23, Books-Form of item has bad characters ($field008hash{formofitem}).")
+        # Form of item (byte 23/6)
+        $bytehash{formofitem} = substr($material_specific_bytes, 5, 1);
+        unless ($bytehash{formofitem} =~ /^[abcdfrs|\s]$/) {
+            push @warningstoreturn, ("008: Byte 23 (006/06), Books-Form of item has bad characters ($bytehash{formofitem}).")
         } #Books 23
 
-        # Nature of contents (byte[24]-[27])
-        $field008hash{bkcontents} = substr($field008,24,4);
-        unless ($field008hash{bkcontents} =~ /^[abcdefgijklmnopqrstuvwz|\s]{4}$/) {
-            push @warningstoreturn, ("008: Bytes 24-27, Books-Contents has bad characters ($field008hash{bkcontents}).")
+        # Nature of contents (byte[24/7]-[27/10])
+        $bytehash{bkcontents} = substr($material_specific_bytes, 6, 4);
+        unless ($bytehash{bkcontents} =~ /^[abcdefgijklmnopqrstuvwz|\s]{4}$/) {
+            push @warningstoreturn, ("008: Bytes 24-27 (006/07-10), Books-Contents has bad characters ($bytehash{bkcontents}).")
         } #Books 24-27
 
-        #Government publication (byte 28)
-        $field008hash{govtpub} = substr($field008,28,1);
-        unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
-            push @warningstoreturn, ("008: Byte 28, Books-Govt publication has bad characters ($field008hash{govtpub}).")
+        #Government publication (byte 28/11)
+        $bytehash{govtpub} = substr($material_specific_bytes, 10, 1);
+        unless ($bytehash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+            push @warningstoreturn, ("008: Byte 28 (006/11), Books-Govt publication has bad characters ($bytehash{govtpub}).")
         } #Books 28
 
-        #Conference publication (byte 29)
-        $field008hash{confpub} = substr($field008,29,1);
-        unless ($field008hash{confpub} =~ /^[01|]$/) {
-            push @warningstoreturn, ("008: Byte 29, Books-Conference publication has bad characters ($field008hash{confpub}).")
+        #Conference publication (byte 29/12)
+        $bytehash{confpub} = substr($material_specific_bytes, 11, 1);
+        unless ($bytehash{confpub} =~ /^[01|]$/) {
+            push @warningstoreturn, ("008: Byte 29 (006/12), Books-Conference publication has bad characters ($bytehash{confpub}).")
         } #Books 29
 
-        #Festschrift (byte 30)
-        $field008hash{fest} = substr($field008,30,1);
-        unless ($field008hash{fest} =~ /^[01|]$/) {
-            push @warningstoreturn, ("008: Byte 30, Books-Festschrift has bad characters ($field008hash{fest}).")
+        #Festschrift (byte 30/13)
+        $bytehash{fest} = substr($material_specific_bytes, 12, 1);
+        unless ($bytehash{fest} =~ /^[01|]$/) {
+            push @warningstoreturn, ("008: Byte 30 (006/13), Books-Festschrift has bad characters ($bytehash{fest}).")
         } #Books 30
 
-        #Index (byte 31)
-        $field008hash{bkindex} = substr($field008,31,1);
-        unless ($field008hash{bkindex} =~ /^[01|]$/) {
-            push @warningstoreturn, ("008: Byte 31, Books-Index has bad characters ($field008hash{bkindex}).");
+        #Index (byte 31/14)
+        $bytehash{bkindex} = substr($material_specific_bytes, 13, 1);
+        unless ($bytehash{bkindex} =~ /^[01|]$/) {
+            push @warningstoreturn, ("008: Byte 31 (006/14), Books-Index has bad characters ($bytehash{bkindex}).");
         } #Books 31
 
-        #Undefined (byte 32)
-        $field008hash{obsoletebyte32} = substr($field008,32,1);
-        unless ($field008hash{obsoletebyte32} =~ /^[|\s]$/) {
-            push @warningstoreturn, ("008: Byte 32, Books-Obsoletebyte32 has bad characters ($field008hash{obsoletebyte32}).");
+        #Undefined (byte 32/15)
+        $bytehash{obsoletebyte32} = substr($material_specific_bytes, 14, 1);
+        unless ($bytehash{obsoletebyte32} =~ /^[|\s]$/) {
+            push @warningstoreturn, ("008: Byte 32 (006/15), Books-Obsoletebyte32 has bad characters ($bytehash{obsoletebyte32}).");
         } #Books 32
 
-        #Literary form (byte 33)
-        $field008hash{fict} = substr($field008,33,1);
-        unless ($field008hash{fict} =~ /^[01cdefhijmpsu|\s]$/) {
-            push @warningstoreturn, ("008: Byte 33, Books-Literary form has bad characters ($field008hash{fict}).");
+        #Literary form (byte 33/16)
+        $bytehash{fict} = substr($material_specific_bytes, 15, 1);
+        unless ($bytehash{fict} =~ /^[01cdefhijmpsu|\s]$/) {
+            push @warningstoreturn, ("008: Byte 33 (006/16), Books-Literary form has bad characters ($bytehash{fict}).");
         } #Books 33
 
-        #Biography (byte 34)
-        $field008hash{biog} = substr($field008,34,1);
-        unless ($field008hash{biog} =~ /^[abcd|\s]$/) {
-            push @warningstoreturn, ("008: Byte 34, Books-Biography has bad characters ($field008hash{biog}).");
+        #Biography (byte 34/17)
+        $bytehash{biog} = substr($material_specific_bytes, 16, 1);
+        unless ($bytehash{biog} =~ /^[abcd|\s]$/) {
+            push @warningstoreturn, ("008: Byte 34 (006/17), Books-Biography has bad characters ($bytehash{biog}).");
         } #Books 34
 
-    } ### Books
+    } ### if Books, mattype 'a' or 't'
+
+    return @warningstoreturn;
+    
+} # _check_book_bytes
+
+=head2 _check_electronic_resources_bytes($mattype, $biblvl, $bytes)
+
+ Internal sub to check 008 bytes 18-34 or 006 bytes 01-17 for Electronic Resources.
+
+ Receives material type, bibliographic level, and a 17-byte string to be validated. The bytes should be bytes 18-34 of the 008, or bytes 01-17 of the 006.
+
+=cut
+
+sub _check_electronic_resources_bytes {
+
+    my $mattype = shift;
+    my $biblvl = shift;
+    my $material_specific_bytes = shift;
+
+    my %bytehash = ();
+    my @warningstoreturn = ();
 
     ########################################
     ########################################
@@ -2962,51 +3201,72 @@ sub validate008 {
     ########################################
 
     #electronic resources/computer files
-    elsif ($mattype =~ /^[m]$/) {
+    if ($mattype =~ /^[m]$/) {
 
-        #Undefined (byte 18-21)
-        $field008hash{electresundef18to21} = substr($field008,18,4);
-        unless ($field008hash{electresundef18to21} =~ /^[|\s]{4}$/) {
-            push @warningstoreturn, ("008: Bytes 18-21, Electronic Resources-Undef18to21 has bad characters ($field008hash{electresundef18to21}).");
+        #Undefined (byte 18-21/1-4)
+        $bytehash{electresundef18to21} = substr($material_specific_bytes, 0, 4);
+        unless ($bytehash{electresundef18to21} =~ /^[|\s]{4}$/) {
+            push @warningstoreturn, ("008: Bytes 18-21 (006/01-04), Electronic Resources-Undef18to21 has bad characters ($bytehash{electresundef18to21}).");
         } #Electronic Resources 18-21
 
-        #Target audience (byte 22)
-        $field008hash{audience} = substr($field008,22,1);
-        unless ($field008hash{audience} =~ /^[abcdefgj|\s]$/) {
-            push @warningstoreturn, ("008: Byte 22, Electronic Resources-Audience has bad characters ($field008hash{audience}).");
+        #Target audience (byte 22/5)
+        $bytehash{audience} = substr($material_specific_bytes, 4, 1);
+        unless ($bytehash{audience} =~ /^[abcdefgj|\s]$/) {
+            push @warningstoreturn, ("008: Byte 22 (006/05), Electronic Resources-Audience has bad characters ($bytehash{audience}).");
         } #Electronic Resources 22
 
-        #Undefined (byte[23]-[25])
-        $field008hash{electresundef23to25} = substr($field008,23,3);
-        unless ($field008hash{electresundef23to25} =~ /^[|\s]{3}$/) {
-            push @warningstoreturn, ("008: Bytes 23-25, Electronic Resources-Undef23to25 has bad characters ($field008hash{electresundef23to25}).");
+        #Undefined (byte[23/6]-[25/8])
+        $bytehash{electresundef23to25} = substr($material_specific_bytes, 5, 3);
+        unless ($bytehash{electresundef23to25} =~ /^[|\s]{3}$/) {
+            push @warningstoreturn, ("008: Bytes 23-25 (006/06-08), Electronic Resources-Undef23to25 has bad characters ($bytehash{electresundef23to25}).");
         } #Electronic Resources 23-25
 
-        #Type of computer file (byte[26])
-        $field008hash{typeoffile} = substr($field008,26,1);
-        unless ($field008hash{typeoffile} =~ /^[abcdefghijmuz|]$/) {
-            push @warningstoreturn, ("008: Byte 26, Electronic Resources-Type of file has bad characters ($field008hash{typeoffile}).");
+        #Type of computer file (byte[26/9])
+        $bytehash{typeoffile} = substr($material_specific_bytes, 8, 1);
+        unless ($bytehash{typeoffile} =~ /^[abcdefghijmuz|]$/) {
+            push @warningstoreturn, ("008: Byte 26 (006/09), Electronic Resources-Type of file has bad characters ($bytehash{typeoffile}).");
         } #Electronic Resources 26
 
-        #Undefined (byte[27])
-        $field008hash{electresundef27} = substr($field008,27,1);
-        unless ($field008hash{electresundef27} =~ /^[|\s]$/) {
-            push @warningstoreturn, ("008: Byte 27, Electronic Resources-Undef27 has bad characters ($field008hash{electresundef27}).");
+        #Undefined (byte[27/10])
+        $bytehash{electresundef27} = substr($material_specific_bytes, 9, 1);
+        unless ($bytehash{electresundef27} =~ /^[|\s]$/) {
+            push @warningstoreturn, ("008: Byte 27 (006/10), Electronic Resources-Undef27 has bad characters ($bytehash{electresundef27}).");
         } #Electronic Resources 27
 
-        #Government publication (byte [28])
-        $field008hash{govtpub} = substr($field008,28,1);
-        unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
-            push @warningstoreturn, ("008: Byte 28, Electronic Resources-Govt publication has bad characters ($field008hash{govtpub}).");
+        #Government publication (byte [28/11])
+        $bytehash{govtpub} = substr($material_specific_bytes, 10, 1);
+        unless ($bytehash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+            push @warningstoreturn, ("008: Byte 28 (006/11), Electronic Resources-Govt publication has bad characters ($bytehash{govtpub}).");
         } #Electronic Resources 28
 
-        #Undefined (byte[29]-[34])
-        $field008hash{electresundef29to34} = substr($field008,29,6);
-        unless ($field008hash{electresundef29to34} =~ /^[|\s]{6}$/) {
-            push @warningstoreturn, ("008: Bytes 29-34, Electronic Resources-Undef29to34 has bad characters ($field008hash{electresundef29to34}).")
+        #Undefined (byte[29/12]-[34/17])
+        $bytehash{electresundef29to34} = substr($material_specific_bytes, 11, 6);
+        unless ($bytehash{electresundef29to34} =~ /^[|\s]{6}$/) {
+            push @warningstoreturn, ("008: Bytes 29-34 (006/12-17), Electronic Resources-Undef29to34 has bad characters ($bytehash{electresundef29to34}).")
         } #Electronic Resources 29-34 
 
-    } #electronic resources
+    } # if electronic resources mattype 'm'
+
+    return @warningstoreturn;
+    
+} # _check_electronic_resources_bytes
+
+=head2 _check_cartographic_bytes($mattype, $biblvl, $bytes)
+
+ Internal sub to check 008 bytes 18-34 or 006 bytes 01-17 for Cartographic Materials.
+
+ Receives material type, bibliographic level, and a 17-byte string to be validated. The bytes should be bytes 18-34 of the 008, or bytes 01-17 of the 006.
+
+=cut
+
+sub _check_cartographic_bytes {
+
+    my $mattype = shift;
+    my $biblvl = shift;
+    my $material_specific_bytes = shift;
+
+    my %bytehash = ();
+    my @warningstoreturn = ();
 
     ########################################
     ########################################
@@ -3017,76 +3277,97 @@ sub validate008 {
     ########################################
 
     #cartographic materials/maps
+    if ($mattype =~ /^[ef]$/) {
 
-    elsif ($mattype =~ /^[ef]$/) {
-
-        #Relief (byte[18]-[21])
-        $field008hash{relief} = substr($field008,18,4);
-        unless ($field008hash{relief} =~ /^[abcdefgijkmz|\s]{4}$/) {
-            push @warningstoreturn, ("008: Bytes 18-21, Cartographic-Relief has bad characters ($field008hash{relief}).");
+        #Relief (byte[18/1]-[21/4])
+        $bytehash{relief} = substr($material_specific_bytes, 0, 4);
+        unless ($bytehash{relief} =~ /^[abcdefgijkmz|\s]{4}$/) {
+            push @warningstoreturn, ("008: Bytes 18-21 (006/01-04), Cartographic-Relief has bad characters ($bytehash{relief}).");
         } #Cartographic 18-21
 
-        #Projection (byte[22]-[23])
-        $field008hash{projection} = substr($field008,22,2);
-        unless ($field008hash{projection} =~ /^\|\||\s\s|aa|ab|ac|ad|ae|af|ag|am|an|ap|au|az|ba|bb|bc|bd|be|bf|bg|bh|bi|bj|bo|br|bs|bu|bz|ca|cb|cc|ce|cp|cu|cz|da|db|dc|dd|de|df|dg|dh|dl|zz$/) {
-            push @warningstoreturn, ("008: Bytes 22-23, Cartographic-Projection has bad characters ($field008hash{projection}).");
+        #Projection (byte[22/5]-[23/6])
+        $bytehash{projection} = substr($material_specific_bytes, 4, 2);
+        unless ($bytehash{projection} =~ /^\|\||\s\s|aa|ab|ac|ad|ae|af|ag|am|an|ap|au|az|ba|bb|bc|bd|be|bf|bg|bh|bi|bj|bo|br|bs|bu|bz|ca|cb|cc|ce|cp|cu|cz|da|db|dc|dd|de|df|dg|dh|dl|zz$/) {
+            push @warningstoreturn, ("008: Bytes 22-23 (006/05-06), Cartographic-Projection has bad characters ($bytehash{projection}).");
             } #Cartographic 22-23 
 
-        #Undefined (byte[24])
-        $field008hash{mapundef24} = substr($field008,24,1);
-        unless ($field008hash{mapundef24} =~ /^[|\s]$/) {
-            push @warningstoreturn, ("008: Byte 24, Cartographic-Undef24 has bad characters ($field008hash{mapundef24}).");
+        #Undefined (byte[24/7])
+        $bytehash{mapundef24} = substr($material_specific_bytes, 6, 1);
+        unless ($bytehash{mapundef24} =~ /^[|\s]$/) {
+            push @warningstoreturn, ("008: Byte 24 (006/7), Cartographic-Undef24 has bad characters ($bytehash{mapundef24}).");
         } #Cartographic 24
 
-        #Type of cartographic material (byte[25])
-        $field008hash{typeofmap} = substr($field008,25,1);
-        unless ($field008hash{typeofmap} =~ /^[abcdefguz|]$/) {
-            push @warningstoreturn, ("008: Byte 25, Cartographic-Type of map has bad characters ($field008hash{typeofmap}).");
+        #Type of cartographic material (byte[25/8])
+        $bytehash{typeofmap} = substr($material_specific_bytes, 7,1);
+        unless ($bytehash{typeofmap} =~ /^[abcdefguz|]$/) {
+            push @warningstoreturn, ("008: Byte 25 (006/08), Cartographic-Type of map has bad characters ($bytehash{typeofmap}).");
         } #Cartographic 25
 
-        #Undefined (byte[26]-[27])
-        $field008hash{mapundef26to27} = substr($field008,26,2);
-        unless ($field008hash{mapundef26to27} =~ /^[|\s]{2}$/) {
-            push @warningstoreturn, ("008: Bytes 26-27, Cartographic-Undef26to27 has bad characters ($field008hash{mapundef26to27}).");
+        #Undefined (byte[26/9]-[27/10])
+        $bytehash{mapundef26to27} = substr($material_specific_bytes, 8, 2);
+        unless ($bytehash{mapundef26to27} =~ /^[|\s]{2}$/) {
+            push @warningstoreturn, ("008: Bytes 26-27 (006/09-10), Cartographic-Undef26to27 has bad characters ($bytehash{mapundef26to27}).");
         } #Cartographic 26-27 
 
-        #Government publication (byte[28])
-        $field008hash{govtpub} = substr($field008,28,1);
-        unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
-            push @warningstoreturn, ("008: Byte 28, Cartographic-Govt publication has bad characters ($field008hash{govtpub}).");
+        #Government publication (byte[28/11])
+        $bytehash{govtpub} = substr($material_specific_bytes, 10, 1);
+        unless ($bytehash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+            push @warningstoreturn, ("008: Byte 28 (006/11), Cartographic-Govt publication has bad characters ($bytehash{govtpub}).");
         } #Cartographic 28
 
-        #Form of item (byte[29])
-        $field008hash{formofitem} = substr($field008,29,1);
-        unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
-            push @warningstoreturn, ("008: Byte 29, Cartographic-Form of item has bad characters ($field008hash{formofitem}).");
+        #Form of item (byte[29/12])
+        $bytehash{formofitem} = substr($material_specific_bytes, 11, 1);
+        unless ($bytehash{formofitem} =~ /^[abcdfrs|\s]$/) {
+            push @warningstoreturn, ("008: Byte 29 (006/12), Cartographic-Form of item has bad characters ($bytehash{formofitem}).");
         } #Cartographic 29
 
-        #Undefined (byte[30])
-        $field008hash{mapundef30} = substr($field008,30,1);
-        unless ($field008hash{mapundef30} =~ /^[|\s]$/) {
-            push @warningstoreturn, ("008: Byte 30, Cartographic-Undef30 has bad characters ($field008hash{mapundef30}).");
+        #Undefined (byte[30/13])
+        $bytehash{mapundef30} = substr($material_specific_bytes, 12, 1);
+        unless ($bytehash{mapundef30} =~ /^[|\s]$/) {
+            push @warningstoreturn, ("008: Byte 30 (006/13), Cartographic-Undef30 has bad characters ($bytehash{mapundef30}).");
         } #Cartographic 30
 
-        #Index (byte[31])
-        $field008hash{mapindex} = substr($field008,31,1);
-        unless ($field008hash{mapindex} =~ /^[01|]$/) {
-            push @warningstoreturn, ("008: Byte 31, Cartographic-Index has bad characters ($field008hash{mapindex}).");
+        #Index (byte[31/14])
+        $bytehash{mapindex} = substr($material_specific_bytes, 13, 1);
+        unless ($bytehash{mapindex} =~ /^[01|]$/) {
+            push @warningstoreturn, ("008: Byte 31 (006/14), Cartographic-Index has bad characters ($bytehash{mapindex}).");
         } #Cartographic 31
 
-        #Undefined (byte[32])
-        $field008hash{mapundef32} = substr($field008,32,1);
-        unless ($field008hash{mapundef32} =~ /^[|\s]$/) {
-            push @warningstoreturn, ("008: Byte 32, Cartographic-Undef32 has bad characters ($field008hash{mapundef32}).");
+        #Undefined (byte[32/15])
+        $bytehash{mapundef32} = substr($material_specific_bytes, 14, 1);
+        unless ($bytehash{mapundef32} =~ /^[|\s]$/) {
+            push @warningstoreturn, ("008: Byte 32 (006/15), Cartographic-Undef32 has bad characters ($bytehash{mapundef32}).");
         } #Cartographic 32
 
-        #Special format characteristics (byte[33]-[34])
-        $field008hash{specialfmtchar} = substr($field008,33,2);
-        unless ($field008hash{specialfmtchar} =~ /^[ejklnoprz|\s]{2}$/) {
-            push @warningstoreturn, ("008: Bytes 33-34, Cartographic-Special format characteristics has bad characters ($field008hash{specialfmtchar}).");
+        #Special format characteristics (byte[33/16]-[34/17])
+        $bytehash{specialfmtchar} = substr($material_specific_bytes, 15, 2);
+        unless ($bytehash{specialfmtchar} =~ /^[ejklnoprz|\s]{2}$/) {
+            push @warningstoreturn, ("008: Bytes 33-34 (006/16-17), Cartographic-Special format characteristics has bad characters ($bytehash{specialfmtchar}).");
             } #Cartographic 33-34
 
     } # Cartographic Materials
+
+
+    return @warningstoreturn;
+    
+} # _check_cartographic_bytes
+
+=head2 _check_music_bytes($mattype, $biblvl, $bytes)
+
+ Internal sub to check 008 bytes 18-34 or 006 bytes 01-17 for Music and Sound Recordings.
+
+ Receives material type, bibliographic level, and a 17-byte string to be validated. The bytes should be bytes 18-34 of the 008, or bytes 01-17 of the 006.
+
+=cut
+
+sub _check_music_bytes {
+
+    my $mattype = shift;
+    my $biblvl = shift;
+    my $material_specific_bytes = shift;
+
+    my %bytehash = ();
+    my @warningstoreturn = ();
 
     ########################################
     ########################################
@@ -3097,69 +3378,90 @@ sub validate008 {
     ########################################
 
     #music and sound recordings
-    elsif ($mattype =~ /^[cdij]$/) {
+    if ($mattype =~ /^[cdij]$/) {
 
-        #Form of composition (byte[18]-[19])
-        $field008hash{formofcomp} = substr($field008,18,2);
-        unless ($field008hash{formofcomp} =~ /^\|\||an|bd|bg|bl|bt|ca|cb|cc|cg|ch|cl|cn|co|cp|cr|cs|ct|cy|cz|df|dv|fg|fm|ft|gm|hy|jz|mc|md|mi|mo|mp|mr|ms|mu|mz|nc|nn|op|or|ov|pg|pm|po|pp|pr|ps|pt|pv|rc|rd|rg|ri|rp|rq|sd|sg|sn|sp|st|su|sy|tc|ts|uu|vr|wz|zz$/) {
-            push @warningstoreturn, ("008: Bytes 18-19, Music-Form of composition has bad characters ($field008hash{formofcomp}).");
+        #Form of composition (byte[18/1]-[19/2])
+        $bytehash{formofcomp} = substr($material_specific_bytes, 0, 2);
+        unless ($bytehash{formofcomp} =~ /^\|\||an|bd|bg|bl|bt|ca|cb|cc|cg|ch|cl|cn|co|cp|cr|cs|ct|cy|cz|df|dv|fg|fm|ft|gm|hy|jz|mc|md|mi|mo|mp|mr|ms|mu|mz|nc|nn|op|or|ov|pg|pm|po|pp|pr|ps|pt|pv|rc|rd|rg|ri|rp|rq|sd|sg|sn|sp|st|su|sy|tc|ts|uu|vr|wz|zz$/) {
+            push @warningstoreturn, ("008: Bytes 18-19 (006/01-02), Music-Form of composition has bad characters ($bytehash{formofcomp}).");
         } #Music 18-19
 
-        #Format of music (byte[20])
-        $field008hash{fmtofmusic} = substr($field008,20,1);
-        unless ($field008hash{fmtofmusic} =~ /^[abcdegmnuz|]$/) {
-            push @warningstoreturn, ("008: Byte 20, Music-Format of music has bad characters ($field008hash{fmtofmusic}).");
+        #Format of music (byte[20/3])
+        $bytehash{fmtofmusic} = substr($material_specific_bytes, 2, 1);
+        unless ($bytehash{fmtofmusic} =~ /^[abcdegmnuz|]$/) {
+            push @warningstoreturn, ("008: Byte 20 (006/03), Music-Format of music has bad characters ($bytehash{fmtofmusic}).");
         } #Music 20
 
-        #Music parts (byte[21])
-        $field008hash{musicparts} = substr($field008,21,1);
-        unless ($field008hash{musicparts} =~ /^[defnu|\s]$/) {
-            push @warningstoreturn, ("008: Byte 21, Music-Parts has bad characters ($field008hash{musicparts}).");
+        #Music parts (byte[21/4])
+        $bytehash{musicparts} = substr($material_specific_bytes, 3, 1);
+        unless ($bytehash{musicparts} =~ /^[defnu|\s]$/) {
+            push @warningstoreturn, ("008: Byte 21 (006/04), Music-Parts has bad characters ($bytehash{musicparts}).");
         } #Music 21
 
-        #Target audience (byte[22])
-        $field008hash{audience} = substr($field008,22,1);
-        unless ($field008hash{audience} =~ /^[abcdefgj|\s]$/) {
-            push @warningstoreturn, ("008: Byte 22, Music-Audience has bad characters ($field008hash{audience}).");
+        #Target audience (byte[22/5])
+        $bytehash{audience} = substr($material_specific_bytes, 4, 1);
+        unless ($bytehash{audience} =~ /^[abcdefgj|\s]$/) {
+            push @warningstoreturn, ("008: Byte 22 (006/05), Music-Audience has bad characters ($bytehash{audience}).");
         } #Music 22
 
-        #Form of item (byte[23])
-        $field008hash{formofitem} = substr($field008,23,1);
-        unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
-            push @warningstoreturn, ("008: Byte 23, Music-Form of item has bad characters ($field008hash{formofitem}).");
+        #Form of item (byte[23/6])
+        $bytehash{formofitem} = substr($material_specific_bytes, 5, 1);
+        unless ($bytehash{formofitem} =~ /^[abcdfrs|\s]$/) {
+            push @warningstoreturn, ("008: Byte 23 (006/06), Music-Form of item has bad characters ($bytehash{formofitem}).");
         } #Music 23
 
-        #Accompanying matter (byte[24]-[29])
-        $field008hash{accompmat} = substr($field008,24,6);
-        unless ($field008hash{accompmat} =~ /^[abcdefghikrsz|\s]{6}$/) {
-            push @warningstoreturn, ("008: Bytes 24-29, Music-Accompanying material has bad characters ($field008hash{accompmat}).");
+        #Accompanying matter (byte[24/7]-[29/12])
+        $bytehash{accompmat} = substr($material_specific_bytes, 6, 6);
+        unless ($bytehash{accompmat} =~ /^[abcdefghikrsz|\s]{6}$/) {
+            push @warningstoreturn, ("008: Bytes 24-29 (006/07-12), Music-Accompanying material has bad characters ($bytehash{accompmat}).");
         } #Music 24-29 
 
-        #Literary text for sound recordings (byte[30]-[31])
-        $field008hash{textforsdrec} = substr($field008,30,2);
-        unless ($field008hash{textforsdrec} =~ /^[abcdefghijklmnoprstz|\s]{2}$/) {
-            push @warningstoreturn, ("008: Byte 30-31, Music-Text for sound recordings has bad characters ($field008hash{textforsdrec}).");
+        #Literary text for sound recordings (byte[30/13]-[31/14])
+        $bytehash{textforsdrec} = substr($material_specific_bytes, 12, 2);
+        unless ($bytehash{textforsdrec} =~ /^[abcdefghijklmnoprstz|\s]{2}$/) {
+            push @warningstoreturn, ("008: Byte 30-31 (006/13-14), Music-Text for sound recordings has bad characters ($bytehash{textforsdrec}).");
         } #Music 30-31
 
-        #Undefined (byte[32])
-        $field008hash{musicundef32} = substr($field008,32,1);
-        unless ($field008hash{musicundef32} =~ /^[|\s]$/) {
-            push @warningstoreturn, ("008: Byte 32, Music-Undef32 has bad characters ($field008hash{musicundef32}).");
+        #Undefined (byte[32/15])
+        $bytehash{musicundef32} = substr($material_specific_bytes, 14, 1);
+        unless ($bytehash{musicundef32} =~ /^[|\s]$/) {
+            push @warningstoreturn, ("008: Byte 32 (006/15), Music-Undef32 has bad characters ($bytehash{musicundef32}).");
         } #Music 32
 
-        #Transposition and arrangement (byte[33])
-        $field008hash{transposeandarr} = substr($field008,33,1);
-        unless ($field008hash{transposeandarr} =~ /^[abcnu|\s]$/) {
-            push @warningstoreturn, ("008: Byte 33, Music-Transposition and arrangement has bad characters ($field008hash{transposeandarr}).");
+        #Transposition and arrangement (byte[33/16])
+        $bytehash{transposeandarr} = substr($material_specific_bytes, 15, 1);
+        unless ($bytehash{transposeandarr} =~ /^[abcnu|\s]$/) {
+            push @warningstoreturn, ("008: Byte 33 (006/16), Music-Transposition and arrangement has bad characters ($bytehash{transposeandarr}).");
         } #Music 33
 
-        #Undefined (byte[34])
-        $field008hash{musicundef34} = substr($field008,34,1);
-        unless ($field008hash{musicundef34} =~ /^[|\s]$/) {
-            push @warningstoreturn, ("008: Byte 34, Music-Undef34 has bad characters ($field008hash{musicundef34}).");
+        #Undefined (byte[34/17])
+        $bytehash{musicundef34} = substr($material_specific_bytes, 16, 1);
+        unless ($bytehash{musicundef34} =~ /^[|\s]$/) {
+            push @warningstoreturn, ("008: Byte 34 (006/17), Music-Undef34 has bad characters ($bytehash{musicundef34}).");
         } #Music 34
 
     } # Music and Sound Recordings
+
+    return @warningstoreturn;
+    
+} # _check_music_bytes
+
+=head2 _check_visual_material_bytes($mattype, $biblvl, $bytes)
+
+ Internal sub to check 008 bytes 18-34 or 006 bytes 01-17 for Visual Materials.
+
+ Receives material type, bibliographic level, and a 17-byte string to be validated. The bytes should be bytes 18-34 of the 008, or bytes 01-17 of the 006.
+
+=cut
+
+sub _check_visual_material_bytes {
+
+    my $mattype = shift;
+    my $biblvl = shift;
+    my $material_specific_bytes = shift;
+
+    my %bytehash = ();
+    my @warningstoreturn = ();
 
     ########################################
     ########################################
@@ -3170,62 +3472,83 @@ sub validate008 {
     ########################################
 
     #visual materials
-    elsif ($mattype =~ /^[gkor]$/) {
+    if ($mattype =~ /^[gkor]$/) {
 
-        #Running time for motion pictures and videorecordings (byte[18]-[20])
-        $field008hash{runningtime} = substr($field008,18,3);
-        unless ($field008hash{runningtime} =~ /^([|\d]{3}|\-{3}|n{3})$/) {
-            push @warningstoreturn, ("008: Bytes 18-20, Visual materials-Runningtime has bad characters ($field008hash{runningtime}).")
+        #Running time for motion pictures and videorecordings (byte[18/1]-[20/3])
+        $bytehash{runningtime} = substr($material_specific_bytes, 0, 3);
+        unless ($bytehash{runningtime} =~ /^([|\d]{3}|\-{3}|n{3})$/) {
+            push @warningstoreturn, ("008: Bytes 18-20 (006/01-03), Visual materials-Runningtime has bad characters ($bytehash{runningtime}).")
         } #Visual materials 18-20
 
-        #Undefined (byte[21])
-        $field008hash{visualmatundef21} = substr($field008,21,1);
-        unless ($field008hash{visualmatundef21} =~ /^[|\s]$/) {
-            push @warningstoreturn, ("008: Byte 21, Visual materials-Undef21 has bad characters ($field008hash{visualmatundef21}).");
+        #Undefined (byte[21/4])
+        $bytehash{visualmatundef21} = substr($material_specific_bytes, 3, 1);
+        unless ($bytehash{visualmatundef21} =~ /^[|\s]$/) {
+            push @warningstoreturn, ("008: Byte 21 (006/04), Visual materials-Undef21 has bad characters ($bytehash{visualmatundef21}).");
         } #Visual materials 21
 
-        #Target audience (byte[22])
-        $field008hash{audience} = substr($field008,22,1);
-        unless ($field008hash{audience} =~ /^[abcdefgj|\s]$/) {
-            push @warningstoreturn, ("008: Byte 22, Visual materials-Audience has bad characters ($field008hash{audience}).");
+        #Target audience (byte[22/5])
+        $bytehash{audience} = substr($material_specific_bytes, 4, 1);
+        unless ($bytehash{audience} =~ /^[abcdefgj|\s]$/) {
+            push @warningstoreturn, ("008: Byte 22 (006/05), Visual materials-Audience has bad characters ($bytehash{audience}).");
         } #Visual materials 22
 
-        #Undefined (byte[23]-[27])
-        $field008hash{visualmatundef23to27} = substr($field008,23,5);
-        unless ($field008hash{visualmatundef23to27} =~ /^[|\s]{5}$/) {
-            push @warningstoreturn, ("008: Bytes 23-27, Visual materials-Undef23to27 has bad characters ($field008hash{visualmatundef23to27}).");
+        #Undefined (byte[23/6]-[27/10])
+        $bytehash{visualmatundef23to27} = substr($material_specific_bytes, 5, 5);
+        unless ($bytehash{visualmatundef23to27} =~ /^[|\s]{5}$/) {
+            push @warningstoreturn, ("008: Bytes 23-27 (006/06-10), Visual materials-Undef23to27 has bad characters ($bytehash{visualmatundef23to27}).");
         } #Visual materials 23-27 
 
-        #Government publication (byte[28])
-        $field008hash{govtpub} = substr($field008,28,1);
-        unless ($field008hash{govtpub} =~ /^[acfilmosuz|\s]$/) {
-            push @warningstoreturn, ("008: Byte 28, Visual materials-Govt publication has bad characters ($field008hash{govtpub}).");
+        #Government publication (byte[28/11])
+        $bytehash{govtpub} = substr($material_specific_bytes, 10, 1);
+        unless ($bytehash{govtpub} =~ /^[acfilmosuz|\s]$/) {
+            push @warningstoreturn, ("008: Byte 28 (006/11), Visual materials-Govt publication has bad characters ($bytehash{govtpub}).");
         } #Visual materials 28
 
-        #Form of item (byte[29])
-        $field008hash{formofitem} = substr($field008,29,1);
-        unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
-            push @warningstoreturn, ("008: Byte 29, Visual materials-Form of item has bad characters ($field008hash{formofitem}).");
+        #Form of item (byte[29/12])
+        $bytehash{formofitem} = substr($material_specific_bytes, 11, 1);
+        unless ($bytehash{formofitem} =~ /^[abcdfrs|\s]$/) {
+            push @warningstoreturn, ("008: Byte 29 (006/12), Visual materials-Form of item has bad characters ($bytehash{formofitem}).");
         } #Visual materials 29
 
-        #Undefined (byte[30]-[32])
-        $field008hash{visualmatundef30to32} = substr($field008,30,3);
-        unless ($field008hash{visualmatundef30to32} =~ /^[|\s]{3}$/) {
-            push @warningstoreturn, ("008: Bytes 30-32, Visual materials-Undef30to32 has bad characters ($field008hash{visualmatundef30to32}).");
+        #Undefined (byte[30/13]-[32/15])
+        $bytehash{visualmatundef30to32} = substr($material_specific_bytes, 12, 3);
+        unless ($bytehash{visualmatundef30to32} =~ /^[|\s]{3}$/) {
+            push @warningstoreturn, ("008: Bytes 30-32 (006/13-15), Visual materials-Undef30to32 has bad characters ($bytehash{visualmatundef30to32}).");
         } #Visual materials 30-32 
 
-        #Type of visual material (byte[33])
-        $field008hash{typevisualmaterial} = substr($field008,33,1);
-        unless ($field008hash{typevisualmaterial} =~ /^[abcdfgiklmnopqrstvwz|]$/) {
-            push @warningstoreturn, ("008: Byte 33, Visual materials-Type of visual material has bad characters ($field008hash{typevisualmaterial}).");
+        #Type of visual material (byte[33/16])
+        $bytehash{typevisualmaterial} = substr($material_specific_bytes, 15, 1);
+        unless ($bytehash{typevisualmaterial} =~ /^[abcdfgiklmnopqrstvwz|]$/) {
+            push @warningstoreturn, ("008: Byte 33 (006/16), Visual materials-Type of visual material has bad characters ($bytehash{typevisualmaterial}).");
         }
 
-        #Technique (byte[34])
-        $field008hash{technique} = substr($field008,34,1);
-        unless ($field008hash{technique} =~ /^[aclnuz|]$/) { push @warningstoreturn, ("008: Byte 34, Visual materials-Technique has bad characters ($field008hash{technique}).");
+        #Technique (byte[34/17])
+        $bytehash{technique} = substr($material_specific_bytes, 16, 1);
+        unless ($bytehash{technique} =~ /^[aclnuz|]$/) { push @warningstoreturn, ("008: Byte 34 (006/17), Visual materials-Technique has bad characters ($bytehash{technique}).");
         } #Visual materials 34
 
     } #Visual Materials
+
+    return @warningstoreturn;
+    
+} # _check_visual_material_bytes
+
+=head2 _check_mixed_material_bytes($mattype, $biblvl, $bytes)
+
+ Internal sub to check 008 bytes 18-34 or 006 bytes 01-17 for Mixed Materials.
+
+ Receives material type, bibliographic level, and a 17-byte string to be validated. The bytes should be bytes 18-34 of the 008, or bytes 01-17 of the 006.
+
+=cut
+
+sub _check_mixed_material_bytes {
+
+    my $mattype = shift;
+    my $biblvl = shift;
+    my $material_specific_bytes = shift;
+
+    my %bytehash = ();
+    my @warningstoreturn = ();
 
     ########################################
     ########################################
@@ -3236,36 +3559,67 @@ sub validate008 {
     ########################################
 
     #mixed materials
-    elsif ($mattype =~ /^[p]$/) {
+    if ($mattype =~ /^[p]$/) {
 
-        #Undefined (byte[18]-[22])
-        $field008hash{mixedundef18to22} = substr($field008,18,5);
-        unless ($field008hash{mixedundef18to22} =~ /^[|\s]{5}$/) {
-            push @warningstoreturn, ("008: Bytes 18-22, Mixed materials-Undef18to22 has bad characters ($field008hash{mixedundef18to22}).");
+        #Undefined (byte[18/1]-[22/5])
+        $bytehash{mixedundef18to22} = substr($material_specific_bytes, 0, 5);
+        unless ($bytehash{mixedundef18to22} =~ /^[|\s]{5}$/) {
+            push @warningstoreturn, ("008: Bytes 18-22 (006/01-05), Mixed materials-Undef18to22 has bad characters ($bytehash{mixedundef18to22}).");
         } #Mixed materials 18-22 
 
-        #Form of item (byte[23])
-        $field008hash{formofitem} = substr($field008,23,1);
-        unless ($field008hash{formofitem} =~ /^[abcdfrs|\s]$/) {
-            push @warningstoreturn, ("008: Byte 23, Mixed materials-Form of item has bad characters ($field008hash{formofitem}).");
+        #Form of item (byte[23/6])
+        $bytehash{formofitem} = substr($material_specific_bytes, 5, 1);
+        unless ($bytehash{formofitem} =~ /^[abcdfrs|\s]$/) {
+            push @warningstoreturn, ("008: Byte 23 (006/06), Mixed materials-Form of item has bad characters ($bytehash{formofitem}).");
         } #Mixed materials 23
 
-        #Undefined (byte[24]-[34])
-        $field008hash{mixedundef24to34} = substr($field008,24,11);
-        unless ($field008hash{mixedundef24to34} =~ /^[|\s]{11}$/) {
-            push @warningstoreturn, ("008: Byes 24-34, Mixed materials-Undef24to34 has bad characters ($field008hash{mixedundef24to34}).");
+        #Undefined (byte[24/7]-[34/17])
+        $bytehash{mixedundef24to34} = substr($material_specific_bytes, 6, 11);
+        unless ($bytehash{mixedundef24to34} =~ /^[|\s]{11}$/) {
+            push @warningstoreturn, ("008: Bytes 24-34 (006/07-17), Mixed materials-Undef24to34 has bad characters ($bytehash{mixedundef24to34}).");
         } #Mixed materials 24-30 
 
     } #Mixed Materials
 
-    return (\@warningstoreturn);
-
-} #validate008
 
 #########################################
 #########################################
 #########################################
 #########################################
+
+    return @warningstoreturn;
+    
+} # _check_mixed_material_bytes
+
+sub _reword_008 {
+    my @warnings = @_;
+
+    foreach (@warnings) {
+        $_ =~ s/^(008: Byte[ s] ?[\-0-9]+) \(006\/[\-0-9]+\)/$1/;        
+    } #foreach warning
+
+    return @warnings;
+
+} #_reword_008
+
+sub _reword_006 {
+
+    my @warnings = @_;
+
+    foreach (@warnings) {
+        $_ =~ s/^(008: Byte[ s] ?[\-0-9]+) \(006\/([\-0-9]+)\)/006: Byte(s) $2/;
+
+    } #foreach warning
+
+    return @warnings;
+
+} #_reword_006
+
+#########################################
+#########################################
+#########################################
+#########################################
+
 =head2 _get_current_date()
 
 Internal sub for use with validate008($field008, $mattype, $biblvl) (actually with parse008date($field008string)). Returns the current year-month-day, in the form yyyymmdd.
@@ -3296,6 +3650,30 @@ sub _get_current_date {
 #########################################
 
 =head1 CHANGES/VERSION HISTORY
+
+Version 1.10: Updated Sept. 5-Jan. 2, 2006. Released Jan. 2, 2006.
+
+ -Revised validate008($field008, $mattype, $biblvl) to use internal subs for material specific byte checking.
+ --Added: 
+ ---_check_cont_res_bytes($mattype, $biblvl, $bytes),
+ ---_check_book_bytes($mattype, $biblvl, $bytes),
+ ---_check_electronic_resources_bytes($mattype, $biblvl, $bytes),
+ ---_check_cartographic_bytes($mattype, $biblvl, $bytes),
+ ---_check_music_bytes($mattype, $biblvl, $bytes),
+ ---_check_visual_material_bytes($mattype, $biblvl, $bytes),
+ ---_check_mixed_material_bytes,
+ ---_reword_008(@warnings), and
+ ---_reword_006(@warnings).
+ --Updated Continuing resources byte 20 from ISSN center to Undefined per MARC 21 update of Oct. 2003.
+ -Updated wording in findfloatinghyphens($record) to report 10 chars on either side of floaters and check_floating_punctuation($record) to report some context if the field in question has more than 80 chars.
+ -check_bk008_vs_bibrefandindex($record) updated to check for 'p. ' following bibliographical references when pagination is present.
+ -check_5xxendingpunctuation($record) reports question mark or exclamation point followed by period as error.
+ -check_5xxendingpunctuation($record) now checks 505.
+ -Updated check_nonpunctendingfields($record) to account for initialisms with interspersed periods.
+ -Added check_floating_punctuation($record) looking for unwanted spaces before periods, commas, and other punctuation marks.
+ -Renamed findfloatinghyphens($record) to fix spelling.
+ -Revised check_bk008_vs_300($record) to account for textual materials on CD-ROM.
+ -Added abstract to name.
 
 Version 1.09: Updated July 18, 2005. Released July 19, 2005 (Aug. 14, 2005 to CPAN).
 
@@ -3448,7 +3826,7 @@ employers of the various contributors to the code.
 Bryan Baldus
 eijabb@cpan.org
 
-Copyright (c) 2003-2005
+Copyright (c) 2003-2006
 
 =cut
 

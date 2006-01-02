@@ -1,5 +1,30 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.10: Updated Sept. 5-Jan. 2, 2006. Released Jan. 2, 2006.
+
+ -Revised validate008($field008, $mattype, $biblvl) to use internal subs for material specific byte checking.
+ --Added: 
+ ---_check_cont_res_bytes($mattype, $biblvl, $bytes),
+ ---_check_book_bytes($mattype, $biblvl, $bytes),
+ ---_check_electronic_resources_bytes($mattype, $biblvl, $bytes),
+ ---_check_cartographic_bytes($mattype, $biblvl, $bytes),
+ ---_check_music_bytes($mattype, $biblvl, $bytes),
+ ---_check_visual_material_bytes($mattype, $biblvl, $bytes),
+ ---_check_mixed_material_bytes,
+ ---_reword_008(@warnings), and
+ ---_reword_006(@warnings).
+ --Updated Continuing resources byte 20 from ISSN center to Undefined per MARC 21 update of Oct. 2003.
+ -Updated wording in findfloatinghyphens($record) to report 10 chars on either side of floaters and check_floating_punctuation($record) to report some context if the field in question has more than 80 chars.
+ -check_bk008_vs_bibrefandindex($record) updated to check for 'p. ' following bibliographical references when pagination is present.
+ -check_5xxendingpunctuation($record) reports question mark or exclamation point followed by period as error.
+ -check_5xxendingpunctuation($record) now checks 505.
+ -Updated check_nonpunctendingfields($record) to account for initialisms with interspersed periods.
+ -Added check_floating_punctuation($record) looking for unwanted spaces before periods, commas, and other punctuation marks.
+ -Renamed findfloatinghyphens($record) to fix spelling.
+ -Revised check_bk008_vs_300($record) to account for textual materials on CD-ROM.
+ -Added abstract to name.
+
+
 Version 1.09: Updated July 18, 2005. Released July 19, 2005.
 
  -Added check_010.t (and check_010.t.pl) tests for check_010($record).

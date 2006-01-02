@@ -1,4 +1,4 @@
-#!perl -Tw
+#!perl -w
 
 =head1 NAME
 
@@ -12,7 +12,7 @@ Devise checks for each subroutine individually.
 =cut
 
 use strict;
-use Test::More tests=>30;
+use Test::More tests=>42;
 
 BEGIN { use_ok( 'MARC::File::USMARC' ); }
 BEGIN { use_ok( 'MARC::Errorchecks' ); }
@@ -91,6 +91,20 @@ FROM_TEXT: {
 			b => "other title info :",
 			c => "Bryan Baldus ... [et al.]. ",
 		],
+		#test ending punctuation in 246
+		[246, "3", "",
+			a => "Test 246 with ending period.",
+		],
+		#test exceptions to 246 ending punctuation
+		[246, "3", "",
+			a => "Test 246 with ending abbreviation, Ph.D.",
+		], #no error
+		[246, "3", "",
+			a => "Test 246 with ending abbreviation, U.S.A.",
+		], #no error
+		[246, "3", "",
+			a => "Test 246 with ending abbreviation, A.",
+		], #no error
 		#test multiple periods in 250
 		[250, "", "",
 			a => "3rd edition..",
@@ -114,15 +128,57 @@ FROM_TEXT: {
 		[504, "","",
 			a => "Includes index",
 		],
+		[504, "","",
+			a => "Includes bibliographical references (44).",
+		],
 		#floating hyphens, ending punctuation
 		[505, "0","",
 			a => "Test 1 -- Test 2 - Test 3 -- Test 4-- testing -- Test 5",
 		],
+		[500, "", "",
+			a => "This has a floating period .",
+		],
+		[500, "", "",
+			a => "This has a floating comma , that should not be there.",
+		],
+		[500, "", "",
+			a => "Why does this field have a floating question mark ?",
+		],
+		[500, "", "",
+			a => "This has an emdash (elipsis replacement) with floating period-- ."
+		], #no error
+		[500, "", "",
+			a => "This has an emdash-- (elipsis replacement) with floating period ."
+		],
+		[500, "", "",
+			a => "This has a regular emdash and floating period -- ."
+		],
+		[500, "", "",
+			a => "This has an emdash-- . Then another sentence."
+		], #no error
+		[500, "", "",
+			a => "This has an emdash-- . Then a floating period ."
+		], 
+		[500, "", "",
+			a => "This lengthy sentence has . multiple floating . punctuation . strewn throughout its midst , to test the reporting abilities ? of the error checking module."
+		], 
+		#5xx with question mark-period
+		[500, "", "",
+			a => "This ends with question mark-period?."
+		], 
+		#505 with continuing emdash
+		[505, "0", "",
+			a => "This ends with emdash --"
+		], 
+		#505 with exclamation point-period
+		[505, "8", "",
+			a => "This ends with exclamation point period!."
+		], 
 		[650, "", "0",
 			a => "MARC formats",
 		],
 	);
-	is( $nfields, 16, "All the fields added OK" );
+	is( $nfields, 33, "All the fields added OK" );
 
 	my @expected = (
 		q{040: Subfield starts with a space.},
@@ -148,11 +204,25 @@ FROM_TEXT: {
 		q{245: Indicator is 1 but 1xx does not exist.},
 		q{Pub. Dates: 008 date1, 2004, 050 date, 2003, and 260_c date, 2000 do not match.},
 		q{008: Index is coded 0 but 500 or 504 mentions index.},
+		q{008: Not coded 'b' but 504 (or 500) mentions 'bibliographical references'.},
+		q{504: Pagination may need 'p.' (Includes bibliographical references (44).).},
 #improve error message in check_041vs008lang
 		q{041: First code (spa) does not match 008 bytes 35-37 (Language end).},
+		q{500: Check ending punctuation (exclamation point or question mark should not be followed by period), This ends  ___ k-period?.},
 		q{504: Check ending punctuation, Includes i ___ udes index},
-		q{505: May have a floating hyphen, Test 1 -- },
+		q{505: Check ending punctuation (exclamation point or question mark should not be followed by period), This ends  ___ t period!.},
+		q{505: May have a floating hyphen,  -- Test 2 - Test 3 -- },
+		q{500: May have floating period (This has a floating period .).},
+		q{500: May have floating comma (This has a floating comma , that should not be there.).},
+		q{500: May have floating question mark (Why does this field have a floating question mark ?).},
+
+		q{500: May have floating period (This has an emdash-- (elipsis replacement) with floating period .).},
+		q{500: May have floating period (This has a regular emdash and floating period -- .).},
+		q{500: May have floating period (This has an emdash-- . Then a floating period .).}, 
+		q{500: May have floating punctuation marks (This lengthy se_ sentence has . multiple f_loating . punctuatio_out its midst , to test th_ing abilities ? of the err).},
 		q{040: Subfield a contains only space(s) or period(s) ( ).},
+		q{246: Check ending punctuation (not normally added for this field), Test 246 w ___ ng period.},
+
 #add more expected messages here
 #		q{},
 
@@ -201,7 +271,9 @@ FROM_TEXT: {
 
 	push @errorstoreturn, (@{check_5xxendingpunctuation($marc)});
 
-	push @errorstoreturn, (@{findfloatinghypens($marc)});
+	push @errorstoreturn, (@{findfloatinghyphens($marc)});
+
+	push @errorstoreturn, (@{check_floating_punctuation($record)});
 
 	push @errorstoreturn, (@{video007vs300vs538($marc)});
 

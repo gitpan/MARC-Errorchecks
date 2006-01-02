@@ -1,10 +1,10 @@
 =head1 NAME
 
-MARC::Errorchecks
+MARC::Errorchecks -- Collection of MARC 21/AACR2 error checks
 
 =head1 DESCRIPTION
 
-Module for storing MARC error-checking subroutines,
+Module for storing MARC error checking subroutines,
 based on MARC21, AACR2, and LCRIs.
 These are used to find errors not easily checked by
 the MARC::Lint and MARC::Lintadditions modules,
@@ -87,6 +87,6 @@ employers of the various contributors to the code.
 Bryan Baldus
 eijabb@cpan.org
 
-Copyright (c) 2003-2004
+Copyright (c) 2003-2006
 
 =cut

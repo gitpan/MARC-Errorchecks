@@ -1,4 +1,4 @@
-#!perl -Tw
+#!perl -w
 
 =head1 NAME
 
@@ -208,7 +208,8 @@ print "MARC::Errorchecks version $MARC::Errorchecks::VERSION\n";
 
 	#get current date in form of yyyymmdd
 	my $current_date = MARC::Errorchecks::_get_current_date();
-
+	my $current_year = substr($current_date, 0, 4);
+	
 	#008 byte checking returned errors will change in future version
 	my @expected = (
 	
@@ -216,8 +217,8 @@ print "MARC::Errorchecks version $MARC::Errorchecks::VERSION\n";
 		q{008: Not 40 characters long. Bytes not validated (050517s2004    ilu           000 0 eng ).},
 		q{008: Not 40 characters long. Bytes not validated (050517s2004    ilu           000 0 eng dd).},
 		q{008: Bytes 0-5, Date entered has bad characters. Record creation date (a50517) has non-numeric characters.},
-		qq{008: Bytes 0-5, Date entered has bad characters. Year entered (2055) is after current year (2005)	Date entered (550517) may be later than current date ($current_date).},
-		qq{008: Bytes 0-5, Date entered has bad characters. Month entered is greater than 12 or is 00	Date entered (053517) may be later than current date ($current_date).},
+		qq{008: Bytes 0-5, Date entered has bad characters. Year entered (2055) is after current year ($current_year)	Date entered (550517) may be later than current date ($current_date).},
+		qq{008: Bytes 0-5, Date entered has bad characters. Month entered is greater than 12 or is 00.},
 		q{008: Bytes 0-5, Date entered has bad characters. Day entered is greater than 31 or is 00.},
 		q{008: Byte 6, Date type (w) has bad characters.},
 		q{008: Bytes 11-14, Date2 (    ) has bad characters or is blank which is not consistent with this date type (w).},
@@ -302,7 +303,7 @@ print "MARC::Errorchecks version $MARC::Errorchecks::VERSION\n";
 		#mixed materials
 		q{008: Bytes 18-22, Mixed materials-Undef18to22 has bad characters (abcde).},
 		q{008: Byte 23, Mixed materials-Form of item has bad characters (e).},
-		q{008: Byes 24-34, Mixed materials-Undef24to34 has bad characters (abcdefghijk).},
+		q{008: Bytes 24-34, Mixed materials-Undef24to34 has bad characters (abcdefghijk).},
 		
 
 #add more expected messages here
