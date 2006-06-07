@@ -9,7 +9,7 @@
 =cut
 
 use strict;
-use Test::More tests=>72;
+use Test::More tests=>73;
 
 BEGIN { use_ok( 'MARC::Errorchecks' ); }
 print "MARC::Errorchecks version $MARC::Errorchecks::VERSION\n";
@@ -17,7 +17,7 @@ print "MARC::Errorchecks version $MARC::Errorchecks::VERSION\n";
 ###################################################
 	#one material type per field in @bad008s
 	my @mattypes = (
-		('a')x29,
+		('a')x30,
 		('m')x7,
 		('e')x11,
 		('c')x10,
@@ -61,6 +61,9 @@ print "MARC::Errorchecks version $MARC::Errorchecks::VERSION\n";
 
 		#language
 		q{050517s2004    ilu           000 0 end d},
+
+		#language (no linguistic content)
+		q{050517s2004    ilu           000 0     d},
 
 		#modified record
 		q{050517s2004    ilu           000 0 engad},
@@ -235,6 +238,7 @@ print "MARC::Errorchecks version $MARC::Errorchecks::VERSION\n";
 		#skip to bytes 35-39
 
 		q{008: Bytes 35-37, Language (end) not valid.},
+		q{008: Bytes 35-37, Language (   ) may now be coded 'zxx' for No linguistic content.},
 		q{008: Byte 38, Modified record has bad characters (a).},
 		q{008: Byte 39, Cataloging source has bad characters (e).},
 

@@ -12,7 +12,7 @@ require Exporter;
 @ISA = qw(Exporter);
 # Items to export into callers namespace by default. @EXPORT = qw();
 
-$VERSION = 1.10;
+$VERSION = 1.11;
 
 =head1 NAME
 
@@ -133,6 +133,8 @@ sub check_all_subs {
     push @errorstoreturn, (@{check_trailing_spaces($record)});
 
     push @errorstoreturn, (@{check_double_periods($record)});
+
+    push @errorstoreturn, (@{check_006($record)});
 
     push @errorstoreturn, (@{check_008($record)});
 
@@ -394,6 +396,56 @@ sub check_trailing_spaces {
     return \@warningstoreturn;
 
 } # check_trailing_spaces
+
+#########################################
+#########################################
+#########################################
+#########################################
+
+=head2 check_006($record)
+
+Code for validating 006s in MARC records.
+Validates each byte of the 006, based on #MARC::Errorchecks::validate008($field008, $mattype, $biblvl)
+
+=head2 TO DO (check_006)
+
+Use validate008 subroutine:
+ -Break byte 18-34 checking into separate sub so it can be used for 006 validation as well.
+ -Optimize efficiency.
+
+ 
+=cut
+
+sub check_006 {
+
+    #get passed MARC::Record object
+    my $record = shift;
+    #declaration of return array
+    my @warningstoreturn = ();
+
+    #get 006 fields from record
+    my @fields006 = $record->field('006') if $record->field('006');
+    #done if no 006
+    return \@warningstoreturn unless (@fields006);
+
+FIELD:    foreach my $field006 (@fields006) {
+        my $field006_string = $field006->as_string();
+        unless (length($field006_string) eq 18) {
+            my $length006 = length($field006_string);
+            push @warningstoreturn, "006: Must be 18 bytes long but is $length006 bytes long ($field006_string).";
+            next FIELD;
+
+        } #unless 18 bytes
+        else {
+            #call _validate006 subroutine from Errorchecks.pm (this package)
+            push @warningstoreturn, @{MARC::Errorchecks::_validate006($field006_string)};
+
+        } #else 18 bytes
+    } #foreach 006
+    
+    return \@warningstoreturn;
+
+} # check_006
 
 #########################################
 #########################################
@@ -2366,6 +2418,7 @@ my %abbexceptions = (
     'ed.' => 1,
     'ft.' => 1,
     'jr.' => 1,
+    'mgmt.' => 1,
 );
 
 sub check_nonpunctendingfields {
@@ -2507,18 +2560,139 @@ sub  {
 #########################################
 #########################################
 
-#########################################
-#########################################
-#########################################
-#########################################
-#########################################
-###### Validate 008 and related #########
-#########################################
-#########################################
-#########################################
-#########################################
-#########################################
-#########################################
+##########################################
+##########################################
+##########################################
+##########################################
+##########################################
+#### Validate 006 and 008 and related ####
+##########################################
+##########################################
+##########################################
+##########################################
+##########################################
+##########################################
+
+##########################
+##########################
+##########################
+
+=head2 _validate006($field006)
+
+Internal sub that checks the validity of 006 bytes.
+Used by the check_006 method for 006 validation.
+
+=head2 DESCRIPTION
+
+Checks the validity of 006 bytes.
+Continuing resources/serials 006 may not work (not thoroughly tested, since 006 would usually be coded for serials, with 006 for other material types?).
+
+=head2 OTHER INFO
+
+Current version implements material specific validation through internal subs for each material type. Those internal subs allow for checking either 006 or 006 material specific bytes.
+
+=cut
+
+sub _validate006 {
+
+    #populate subroutine $field006 variable with passed string
+    my $field006 = shift;
+
+    #declaration of return array
+    my @warningstoreturn = ();
+
+    #make sure passed 006 field is exactly 18 bytes
+    if (length($field006) != 18) {push @warningstoreturn, ("006: Not 18 characters long. Bytes not validated ($field006).");}
+
+    #return if 006 field of 18 bytes was not found
+    return (\@warningstoreturn) if (@warningstoreturn);
+
+    ######################################
+    ### Material Specific Bytes, 01-17 ###
+    ######################################
+    ##### checked via internal subs ######
+    ######################################
+
+    #first byte will be either mattype (if not 's') or biblvl ('s' for continuing resources)
+    my $mattype = substr($field006, 0, 1);
+    my $biblvl = substr($field006, 0, 1);
+    my $material_specific_bytes = substr($field006, 1, 17);
+
+    ### Check continuing resources (serials) ###
+    if ($biblvl =~ /^[s]$/) {
+        my @warnings_returned = _check_cont_res_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 006 rather than 008
+            @warnings_returned = _reword_006(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #continuing resources (serials)
+
+    #books
+    elsif ($mattype =~ /^[at]$/) {
+        my @warnings_returned = _check_book_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 006 rather than 008
+            @warnings_returned = _reword_006(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #books
+
+    #electronic resources/computer files
+    elsif ($mattype =~ /^[m]$/) {
+        my @warnings_returned = _check_electronic_resources_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 006 rather than 008
+            @warnings_returned = _reword_006(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #electronic resources
+    
+    #cartographic materials/maps
+    elsif ($mattype =~ /^[ef]$/) {
+        my @warnings_returned = _check_cartographic_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 006 rather than 008
+            @warnings_returned = _reword_006(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #cartographic
+    
+    #music and sound recordings
+    elsif ($mattype =~ /^[cdij]$/) {
+        my @warnings_returned = _check_music_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 006 rather than 008
+            @warnings_returned = _reword_006(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #music/sound recordings
+
+    #visual materials
+    elsif ($mattype =~ /^[gkor]$/) {
+        my @warnings_returned = _check_visual_material_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 006 rather than 008
+            @warnings_returned = _reword_006(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #visual materials
+
+    #mixed materials
+    elsif ($mattype =~ /^[p]$/) {
+        my @warnings_returned = _check_mixed_material_bytes($mattype, $biblvl, $material_specific_bytes);
+        if (@warnings_returned) {
+            #revise warning messages to report 006 rather than 008
+            @warnings_returned = _reword_006(@warnings_returned);
+            push @warningstoreturn, @warnings_returned;
+        } #if bad bytes
+    } #mixed materials
+
+    return (\@warningstoreturn);
+
+} #_validate006
+
+
 
 ##########################
 ##########################
@@ -2848,10 +3022,10 @@ sub validate008 {
 
     # Language (byte[35]-[37])
 
-#%LanguageCodes %ObsoleteLanguageCodes
-    my $validlang = 1 if ($LanguageCodes{$field008hash{langcode}});
+    #%LanguageCodes %ObsoleteLanguageCodes
+    my $validlang = 1 if (exists $LanguageCodes{$field008hash{langcode}});
     #look for invalid code match if valid code was not matched
-    my $obsoletelang = 1 if ($ObsoleteLanguageCodes{$field008hash{langcode}});
+    my $obsoletelang = 1 if (exists $ObsoleteLanguageCodes{$field008hash{langcode}});
 
     # skip valid subfields
     unless ($validlang) {
@@ -2864,7 +3038,10 @@ sub validate008 {
         } #else code not found 
     } # unless found valid code
 
-
+    #report new 'zxx' code when '   ' (3-blanks) is existing code
+    if ($field008hash{langcode} eq '   ') {
+        push @warningstoreturn, ("008: Bytes 35-37, Language ($field008hash{langcode}) may now be coded 'zxx' for No linguistic content.");
+    } #if 008/35-37 is 3-blanks
     ##################################################
 
     # Modified record (byte[38])
@@ -3650,6 +3827,13 @@ sub _get_current_date {
 #########################################
 
 =head1 CHANGES/VERSION HISTORY
+
+Version 1.11: Updated June 5, 2006. Released June 6, 2006.
+
+ -Implemented check_006($record) to validate 006 (currently only does length check).
+ --Revised validate008($field008, $mattype, $biblvl) to use internal sub for material specific bytes (18-34)
+ -Revised validate008($field008, $mattype, $biblvl) language code (008/35-37) to report new 'zxx' code availability when '   ' is the code in the record.
+ -Added 'mgmt.' to %abbexceptions for check_nonpunctendingfields($record).
 
 Version 1.10: Updated Sept. 5-Jan. 2, 2006. Released Jan. 2, 2006.
 

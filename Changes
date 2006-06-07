@@ -1,5 +1,12 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.11: Updated June 5, 2006. Released June 6, 2006.
+
+ -Implemented check_006($record) to validate 006 (currently only does length check).
+ --Revised validate008($field008, $mattype, $biblvl) to use internal sub for material specific bytes (18-34)
+ -Revised validate008($field008, $mattype, $biblvl) language code (008/35-37) to report new 'zxx' code availability when '   ' is the code in the record.
+ -Added 'mgmt.' to %abbexceptions for check_nonpunctendingfields($record).
+
 Version 1.10: Updated Sept. 5-Jan. 2, 2006. Released Jan. 2, 2006.
 
  -Revised validate008($field008, $mattype, $biblvl) to use internal subs for material specific byte checking.
