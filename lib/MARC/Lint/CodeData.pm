@@ -6,7 +6,7 @@ use warnings;
 #declare the necessary variables
 use vars qw($VERSION @EXPORT_OK %GeogAreaCodes %ObsoleteGeogAreaCodes %LanguageCodes %ObsoleteLanguageCodes %CountryCodes %ObsoleteCountryCodes %Sources600_651 %ObsoleteSources600_651 %Sources655 %ObsoleteSources655);
 
-$VERSION = '1.08';
+$VERSION = '1.14';
 
 use base qw(Exporter AutoLoader);
 
@@ -92,6 +92,30 @@ They output tab-separated codes for updating the data below.
 
 =head1 VERSION HISTORY
 
+Version 1.14: Updated Jan. 8, 2007.
+
+ -Added new source codes from Technical Notice of Jan. 5, 2007.
+
+Version 1.13: Updated Nov. 19, 2006.
+
+ -Added new source codes from Technical Notice of Nov. 14, 2006.
+
+Version 1.12: Updated Oct. 20, 2006.
+
+ -Added new source code from Technical Notice of Oct. 19, 2006.
+
+Version 1.11: Updated Oct. 18, 2006.
+
+ -Added new source codes from Technical Notice of Oct. 17, 2006.
+
+Version 1.10: Updated Aug. 30, 2006.
+
+ -Added new source codes from Technical Notice of Aug. 29, 2006.
+
+Version 1.09: Updated June 26, 2006.
+
+ -Added new source codes from Technical Notice of June 23, 2006.
+
 Version 1.08: Updated May 30, 2006.
 
  -Added new source codes from Technical Notice of May 26, 2006.
@@ -144,7 +168,7 @@ Version 1.00 (original version): First release, Dec. 5, 2004. Uploaded to Source
 
 #fill the valid Language Codes hash
 
-%LanguageCodes = map {($_, 1)} (split "\t", ("   	aar	abk	ace	ach	ada	ady	afa	afh	afr	ain	aka	akk	alb	ale	alg	alt	amh	ang	anp	apa	ara	arc	arg	arm	arn	arp	art	arw	asm	ast	ath	aus	ava	ave	awa	aym	aze	bad	bai	bak	bal	bam	ban	baq	bas	bat	bej	bel	bem	ben	ber	bho	bih	bik	bin	bis	bla	bnt	bos	bra	bre	btk	bua	bug	bul	bur	byn	cad	cai	car	cat	cau	ceb	cel	cha	chb	che	chg	chi	chk	chm	chn	cho	chp	chr	chu	chv	chy	cmc	cop	cor	cos	cpe	cpf	cpp	cre	crh	crp	csb	cus	cze	dak	dan	dar	day	del	den	dgr	din	div	doi	dra	dsb	dua	dum	dut	dyu	dzo	efi	egy	eka	elx	eng	enm	epo	est	ewe	ewo	fan	fao	fat	fij	fil	fin	fiu	fon	fre	frm	fro	frr	frs	fry	ful	fur	gaa	gay	gba	gem	geo	ger	gez	gil	gla	gle	glg	glv	gmh	goh	gon	gor	got	grb	grc	gre	grn	gsw	guj	gwi	hai	hat	hau	haw	heb	her	hil	him	hin	hit	hmn	hmo	hsb	hun	hup	iba	ibo	ice	ido	iii	ijo	iku	ile	ilo	ina	inc	ind	ine	inh	ipk	ira	iro	ita	jav	jbo	jpn	jpr	jrb	kaa	kab	kac	kal	kam	kan	kar	kas	kau	kaw	kaz	kbd	kha	khi	khm	kho	kik	kin	kir	kmb	kok	kom	kon	kor	kos	kpe	krc	krl	kro	kru	kua	kum	kur	kut	lad	lah	lam	lao	lat	lav	lez	lim	lin	lit	lol	loz	ltz	lua	lub	lug	lui	lun	luo	lus	mac	mad	mag	mah	mai	mak	mal	man	mao	map	mar	mas	may	mdf	mdr	men	mga	mic	min	mis	mkh	mlg	mlt	mnc	mni	mno	moh	mol	mon	mos	mul	mun	mus	mwl	mwr	myn	myv	nah	nai	nap	nau	nav	nbl	nde	ndo	nds	nep	new	nia	nic	niu	nno	nob	nog	non	nor	nso	nub	nwc	nya	nym	nyn	nyo	nzi	oci	oji	ori	orm	osa	oss	ota	oto	paa	pag	pal	pam	pan	pap	pau	peo	per	phi	phn	pli	pol	pon	por	pra	pro	pus	que	raj	rap	rar	roa	roh	rom	rum	run	rus	sad	sag	sah	sai	sal	sam	san	sas	sat	scc	scn	sco	scr	sel	sem	sga	sgn	shn	sid	sin	sio	sit	sla	slo	slv	sma	sme	smi	smj	smn	smo	sms	sna	snd	snk	sog	som	son	sot	spa	srd	srn	srr	ssa	ssw	suk	sun	sus	sux	swa	swe	syr	tah	tai	tam	tat	tel	tem	ter	tet	tgk	tgl	tha	tib	tig	tir	tiv	tkl	tlh	tli	tmh	tog	ton	tpi	tsi	tsn	tso	tuk	tum	tup	tur	tut	tvl	twi	tyv	udm	uga	uig	ukr	umb	und	urd	uzb	vai	ven	vie	vol	vot	wak	wal	war	was	wel	wen	wln	wol	xal	xho	yao	yap	yid	yor	ypk	zap	zen	zha	znd	zul	zun	zxx"));
+%LanguageCodes = map {($_, 1)} (split "\t", ("   	aar	abk	ace	ach	ada	ady	afa	afh	afr	ain	aka	akk	alb	ale	alg	alt	amh	ang	anp	apa	ara	arc	arg	arm	arn	arp	art	arw	asm	ast	ath	aus	ava	ave	awa	aym	aze	bad	bai	bak	bal	bam	ban	baq	bas	bat	bej	bel	bem	ben	ber	bho	bih	bik	bin	bis	bla	bnt	bos	bra	bre	btk	bua	bug	bul	bur	byn	cad	cai	car	cat	cau	ceb	cel	cha	chb	che	chg	chi	chk	chm	chn	cho	chp	chr	chu	chv	chy	cmc	cop	cor	cos	cpe	cpf	cpp	cre	crh	crp	csb	cus	cze	dak	dan	dar	day	del	den	dgr	din	div	doi	dra	dsb	dua	dum	dut	dyu	dzo	efi	egy	eka	elx	eng	enm	epo	est	ewe	ewo	fan	fao	fat	fij	fil	fin	fiu	fon	fre	frm	fro	frr	frs	fry	ful	fur	gaa	gay	gba	gem	geo	ger	gez	gil	gla	gle	glg	glv	gmh	goh	gon	gor	got	grb	grc	gre	grn	gsw	guj	gwi	hai	hat	hau	haw	heb	her	hil	him	hin	hit	hmn	hmo	hsb	hun	hup	iba	ibo	ice	ido	iii	ijo	iku	ile	ilo	ina	inc	ind	ine	inh	ipk	ira	iro	ita	jav	jbo	jpn	jpr	jrb	kaa	kab	kac	kal	kam	kan	kar	kas	kau	kaw	kaz	kbd	kha	khi	khm	kho	kik	kin	kir	kmb	kok	kom	kon	kor	kos	kpe	krc	krl	kro	kru	kua	kum	kur	kut	lad	lah	lam	lao	lat	lav	lez	lim	lin	lit	lol	loz	ltz	lua	lub	lug	lui	lun	luo	lus	mac	mad	mag	mah	mai	mak	mal	man	mao	map	mar	mas	may	mdf	mdr	men	mga	mic	min	mis	mkh	mlg	mlt	mnc	mni	mno	moh	mol	mon	mos	mul	mun	mus	mwl	mwr	myn	myv	nah	nai	nap	nau	nav	nbl	nde	ndo	nds	nep	new	nia	nic	niu	nno	nob	nog	non	nor	nqo	nso	nub	nwc	nya	nym	nyn	nyo	nzi	oci	oji	ori	orm	osa	oss	ota	oto	paa	pag	pal	pam	pan	pap	pau	peo	per	phi	phn	pli	pol	pon	por	pra	pro	pus	que	raj	rap	rar	roa	roh	rom	rum	run	rus	sad	sag	sah	sai	sal	sam	san	sas	sat	scc	scn	sco	scr	sel	sem	sga	sgn	shn	sid	sin	sio	sit	sla	slo	slv	sma	sme	smi	smj	smn	smo	sms	sna	snd	snk	sog	som	son	sot	spa	srd	srn	srr	ssa	ssw	suk	sun	sus	sux	swa	swe	syr	tah	tai	tam	tat	tel	tem	ter	tet	tgk	tgl	tha	tib	tig	tir	tiv	tkl	tlh	tli	tmh	tog	ton	tpi	tsi	tsn	tso	tuk	tum	tup	tur	tut	tvl	twi	tyv	udm	uga	uig	ukr	umb	und	urd	uzb	vai	ven	vie	vol	vot	wak	wal	war	was	wel	wen	wln	wol	xal	xho	yao	yap	yid	yor	ypk	zap	zen	zha	znd	zul	zun	zxx	zza"));
 
 #fill the obsolete Language Codes hash
 
@@ -158,13 +182,13 @@ Version 1.00 (original version): First release, Dec. 5, 2004. Uploaded to Source
 
 %ObsoleteCountryCodes = map {($_, 1)} (split "\t", ("ai 	air	ac 	ajr	bwr	cn 	cz 	cp 	ln 	cs 	err	gsr	ge 	gn 	hk 	iw 	iu 	jn 	kzr	kgr	lvr	lir	mh 	mvr	nm 	pt 	rur	ry 	xi 	sk 	xxr	sb 	sv 	tar	tt 	tkr	unr	uk 	ui 	us 	uzr	vn 	vs 	wb 	ys "));
 
-%Sources600_651 = map {($_, 1)} (split "\t", ("aass	aat	abne	agrifors	agrovoc	agrovocf	agrovocs	albt	allars	amg	apaist	asft	asth	atla	barn	bella	bet	bhammf	bhashe	bicssc	bidex	blmlsh	bt	cabt	cash	cct	ccte	cctf	ceeus	cht	ciesiniv	cilla	csahssa	csalsct	csapa	csh	cstud	dacs	dcs	ddcrit	dissao	dit	drama	dtict	ebfem	eclas	eks	ericd	est	fast	fgtpcm	fire	fmesh	fnhl	francis	galestne	gem	georeft	gtt	hapi	hkcan	helecon	henn	hlasstg	huc	iaat	ica	icpsr	idas	iescs	iest	ilot	ilpt	inist	inspect	ipat	ipsp	isis	itoamc	itrt	jhpb	jhpk	jlabsh	kaa	kao	kaunokki	kdm	kitu	kssbar	kta	ktpt	ktta	kula	kupu	lacnaf	larpcal	lcsh	lcshac	lctgm	lemac	lemb	liv	lnmmbr	local	ltcsh	lua	maaq	mar	masa	mesh	mipfesd	mmm	mpirdes	mtirdes	musa	nal	nalnaf	nasat	ncjt	ndllsh	nicem	nimacsc	nlmnaf	ntcpsc	ntcsd	ntissc	nznb	ogst	opms	pascal	peri	pha	pmbok	pmcsg	poliscit	popinte	precis	prvt	psychit	qrma	qrmak	raam	ram	rasuqam	renib	reo	rero	rerovoc	reveal	rma	rpe	rswk	rugeo	rurkp	rvm	sao	sbiao	scgdst	scisshl	scot	sears	sfit	sgc	sgce	shbe	she	sigle	sipri	sk	slem	smda	sosa	swd	swemesh	taika	taxhs	tbit	test	tgn	thub	tlka	tlsh	toit	trt	trtsa	tsht	ttka	ulan	umitrist	unbisn	unbist	unescot	usaidt	vmj	waqaf	watrest	wgst	wot	wpicsh	ysa"));
+%Sources600_651 = map {($_, 1)} (split "\t", ("aass	aat	abne	agrifors	agrovoc	agrovocf	agrovocs	aktp	albt	allars	amg	apaist	asft	asth	atla	aucsh	barn	bella	bet	bgtchm	bhammf	bhashe	biccbmc	bicssc	bidex	blmlsh	bt	cabt	cash	cct	ccte	cctf	ceeus	cht	ciesiniv	cilla	conorsi	csahssa	csalsct	csapa	csh	cstud	czenas	dacs	dcs	ddcrit	dissao	dit	drama	dtict	ebfem	eclas	eks	ericd	est	fast	fgtpcm	fire	fmesh	fnhl	francis	galestne	gem	georeft	gst	gtt	hapi	hkcan	helecon	henn	hlasstg	hoidokki	huc	iaat	ica	icpsr	idas	iescs	iest	ilot	ilpt	inist	inspect	ipat	ipsp	isis	itglit	itoamc	itrt	jhpb	jhpk	jlabsh	kaa	kao	kaunokki	kdm	kitu	kkts	kssbar	kta	ktpt	ktta	kula	kupu	lacnaf	larpcal	lcsh	lcshac	lctgm	lemac	lemb	liv	lnmmbr	local	ltcsh	lua	maaq	mar	masa	mesh	mipfesd	mmm	mpirdes	mtirdes	musa	nal	nalnaf	nasat	ncjt	ndllsh	nicem	nimacsc	nlgaf	nlgkk	nlgsh	nlmnaf	ntcpsc	ntcsd	ntissc	nznb	ogst	opms	pascal	peri	pha	pmbok	pmcsg	poliscit	popinte	precis	prvt	psychit	qrma	qrmak	qtglit	raam	ram	rasuqam	renib	reo	rero	rerovoc	reveal	rma	rpe	rswk	rugeo	rurkp	rvm	sao	sbiao	scgdst	scisshl	scot	sears	sfit	sgc	sgce	shbe	she	sigle	sipri	sk	slem	smda	snt	socio	sosa	spines	swd	swemesh	taika	taxhs	tbit	test	tgn	tho	thub	tlka	tlsh	toit	trt	trtsa	tsht	ttka	ulan	umitrist	unbisn	unbist	unescot	usaidt	vmj	waqaf	watrest	wgst	wot	wpicsh	ysa"));
 
 #The codes cash, lcsh, lcshac, mesh, nal, and rvm are covered by 2nd indicators in 600-655
 #they are only used when indicators are not available
 %ObsoleteSources600_651 = map {($_, 1)} (split "\t", ("cash	lcsh	lcshac	mesh	nal	reroa	rvm"));
 
-%Sources655 = map {($_, 1)} (split "\t", ("	aat	amg	asth	barn	bt	cash	cct	dacs	dcs	dct	ericd	estc	fast	fbg	fire	galestne	gem	gmgpc	gsafd	gtlm	hapi	hkcan	ica	ilot	itrt	jhpb	jhpk	lacnaf	lcsh	lcshac	lctgm	lemac	local	maaq	mar	marcgt	mesh	migfg	mim	nal	nalnaf	ngl	nimafc	nlmnaf	nmc	nznb	opms	pmcsg	qrmak	raam	radfg	rbbin	rbgenr	rbpap	rbpri	rbprov	rbpub	rbtyp	reo	rerovoc	reveal	rma	rugeo	rvm	sao	sears	sgc	sgce	sgp	sipri	swemesh	tbit	thub	toit	tsht	ulan	vmj	waqaf"));
+%Sources655 = map {($_, 1)} (split "\t", ("aat	aktp	amg	asth	aucsh	barn	biccbmc	bgtchm	bt	cash	cct	conorsi	czenas	dacs	dcs	dct	ericd	estc	fast	fbg	fire	galestne	gem	gmgpc	gsafd	gst	gtlm	hapi	hkcan	hoidokki	ica	ilot	itglit	itrt	jhpb	jhpk	kkts	lacnaf	lcsh	lcshac	lctgm	lemac	local	maaq	mar	marcgt	mesh	migfg	mim	nal	nalnaf	ngl	nimafc	nlgaf	nlgkk	nlgsh	nlmnaf	nmc	nznb	opms	pmcsg	qrmak	qtglit	raam	radfg	rbbin	rbgenr	rbpap	rbpri	rbprov	rbpub	rbtyp	reo	rerovoc	reveal	rma	rugeo	rvm	sao	sears	sgc	sgce	sgp	sipri	snt	socio	spines	swemesh	tbit	tho	thub	toit	tsht	ulan	vmj	waqaf"));
 
 #The codes cash, lcsh, lcshac, mesh, nal, and rvm are covered by 2nd indicators in 600-655
 #they are only used when indicators are not available
@@ -184,7 +208,7 @@ employers of the various contributors to the code.
 Bryan Baldus
 eijabb@cpan.org
 
-Copyright (c) 2004-2006.
+Copyright (c) 2004-2007.
 
 =cut
 

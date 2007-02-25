@@ -12,7 +12,7 @@ require Exporter;
 @ISA = qw(Exporter);
 # Items to export into callers namespace by default. @EXPORT = qw();
 
-$VERSION = 1.11;
+$VERSION = 1.12;
 
 =head1 NAME
 
@@ -319,10 +319,11 @@ sub check_internal_spaces {
             my $subdata = $newsubfields[$index];
 
             #report subfield data with more than one space
-            if ($subdata =~ /  +/) {
+            if (my @internal_spaces = ($subdata =~ /(.{0,10}  +?.{0,10})/g)) {
                 #warn, with exception for 260c with open date in angle brackets
-                push @warningstoreturn, join '', ($tag, ": has multiple internal spaces.") unless (($tag eq '260') && ($subdata =~ /\<.*\>/));
+                push @warningstoreturn, join '', ($tag, ": has multiple internal spaces (", (join '_', @internal_spaces), ").") unless (($tag eq '260') && ($subdata =~ /\<.*?\>/));
             } #if has multiple spaces
+
 
 ########################################
 ### added check for space at beginning of field
@@ -809,10 +810,17 @@ sub check_bk008_vs_300 {
 
             #Check for 'p.' or 'v.' or leaves in subfield 'a' unless electronic resource
             if ($subfielda) {
-                push @warningstoreturn, ("300: Check subfield _a for p. or v.") unless (
-                    ($subfielda =~  /\(?.*\b[pv]\.[,\) ]?/) ||
-                    ($subfielda =~/ leaves / && ($subfielda !~ / leaves of plates/)) ||
-                    (($record->subfield('245', 'h') && ($record->subfield('245', 'h') =~ /\[electronic resource\]/))));
+                unless (($record->subfield('245', 'h')) && ($record->subfield('245', 'h') =~ /\[electronic resource\]/)) {
+                    #error if no 'p.', 'v.', or 'leaves' (alone) found
+                    push @warningstoreturn, ("300: Check subfield _a for p. or v.") unless (
+                       ($subfielda =~  /\(?.*\b[pv]\.[,\) ]?/) ||
+                       ($subfielda =~ / leaves / && ($subfielda !~ / leaves of plates/))
+                    );
+                    #error if 'p.' found after parenthetical qualifier on 'v.'
+                    if (($subfielda =~  /\(((?:unpaged)|(?:various pagings))\) p\.?\b/)) {
+                        push @warningstoreturn, ("300: Check subfield _a for extra p.")
+                    } #if extra 'p.'
+                } #unless electronic resource
             } #if 300 subfielda exists
             #report missing subfield a
             else {
@@ -828,6 +836,11 @@ sub check_bk008_vs_300 {
                 push @warningstoreturn, ("300: Subfield _c is not present.");
             } #else $subfieldc is undefined
 #######################################
+
+            #if $subfieldb present with 'col', ensure period exists after all
+            if ($subfieldb && ($subfieldb =~ /col[^\.]/)) {
+                push @warningstoreturn, ("300: Check subfield _b for missing period after col.");
+            } #if subfield b has 'col' with missing period
 
 ##### 008 ill. vs. 300 wording basic checks 
             # if $illcodes not coded and no subfield 'b' no problem so move on
@@ -949,7 +962,7 @@ sub parse008vs300b {
     elsif ($subfieldb =~ /ill\./) {push @illcodewarns, ("008: Bytes 18-21 do not have code 'a' but 300 subfield 'b' has 'ill.'")}
 
     #if 008/18-21 has code 'b', 300$b needs to have 'map' (or 'maps') 
-    if ($hasmap) {push @illcodewarns, ("300: bytes 18-21 have code 'b' but 300 subfield b is $subfieldb") unless ($subfieldb =~ /map/);}
+    if ($hasmap) {push @illcodewarns, ("300: bytes 18-21 have code 'b' but 300 subfield b is $subfieldb") unless ($subfieldb =~ /map[ \,s]/);}
     # if 300$b has 'map', 008/18-21 should have 'b'
     elsif ($subfieldb =~ /map/) {push @illcodewarns, ("008: Bytes 18-21 do not have code 'b' but 300 subfield 'b' has 'map' or 'maps'")}
 
@@ -1463,8 +1476,12 @@ push @warningstoreturn, ("008: Coded 'b' but 504 (or 500) does not mention 'bibl
         push @warningstoreturn, ("008: Not coded 'b' but 504 (or 500) mentions 'bibliographical references'.");
     } # if 008cont 'b' but not 504 or 500 with bib refs
 
-    #check for 'p.' if pagination is present with bibliographical references
     foreach my $bibref (@bibrefsin504) {
+        #check spacing around parentheses
+        if ($bibref =~ /[\(\)]/) {
+            push @warningstoreturn, ("504: Check spacing around parentheses ($bibref).") if (($bibref =~ /\(.+?\)[^ \,\.]/) || ($bibref =~ /[^ ]\(.+?\)/));
+        } #if 504 has parentheses
+        #check for 'p.' if pagination is present with bibliographical references
         if ($bibref =~ /bibliographical references \((?!p\. ).*?\)?/) {
             unless ($bibref =~ /bibliographical references \(t\.p\. .*?\)?/) {
                 push @warningstoreturn, ("504: Pagination may need 'p.' ($bibref).");
@@ -2157,8 +2174,8 @@ my %ldrbytes = (
         '2' => 'Less-than-full level, material not examined',
 #        '3' => 'Abbreviated level',
         '4' => 'Core level',
-#        '5' => 'Partial (preliminary) level',
-#        '7' => 'Minimal level',
+        '5' => 'Partial (preliminary) level',
+        '7' => 'Minimal level',
         '8' => 'Prepublication level',
 #        'u' => 'Unknown',
 #        'z' => 'Not applicable'
@@ -2473,7 +2490,7 @@ sub check_nonpunctendingfields {
                 #see if last word is a known exception
                 unless ($abbexceptions{$lastwords[-1]} || ($lastwords[-1] =~ /(?:(?:\b|\W)[a-zA-Z]\.)$/)) {
 
-                    push @warningstoreturn, join '', ($field->tag(), ": Check ending punctuation (not normally added for this field), ", $firstchars, " ___ ", $lastchars);
+                    push @warningstoreturn, join '', ($tag, ": Check ending punctuation (not normally added for this field), ", $firstchars, " ___ ", $lastchars);
                 }
             }
             # stop after first non-numeric
@@ -2514,8 +2531,7 @@ sub check_fieldlength {
     my @warningstoreturn = ();
 
     my @fields = $record->fields();
-    push @warningstoreturn, join '', ("Record: Contains ", scalar @fields, " fields.")
-if (@fields > 50);
+#    push @warningstoreturn, join '', ("Record: Contains ", scalar @fields, " fields.") if (@fields > 50);
     foreach my $field (@fields) {
         if (length($field->as_string()) > 1870) {
                 push @warningstoreturn, join '', ($field->tag(), ": Field is longer than 1870 bytes.");
@@ -3827,6 +3843,18 @@ sub _get_current_date {
 #########################################
 
 =head1 CHANGES/VERSION HISTORY
+
+Version 1.12: Updated July 5-Nov. 17, 2006. Released Feb. 25, 2007.
+
+ -Updated check_bk008_vs_300($record) to look for extra p. or v. after parenthetical qualifier.
+ -Updated check_bk008_vs_300($record) to look for missing period after 'col' in subfield 'b'.
+ -Replaced $field-tag() with $tag in error message reporting in check_nonpunctendingfields($record).
+ -Turned off 50-field limit check in check_fieldlength($record).
+ -Updated parse008vs300b($illcodes, $field300subb) to look for /map[ \,s]/ rather than just 'map' when 008 is coded 'b'.
+ -Updated check_bk008_vs_bibrefandindex($record) to look for spacing on each side of parenthetical pagination.
+ -Updated check_internal_spaces($record) to report 10 characters on either side of each set of multiple internal spaces.
+ -Uncommented level-5 and level-7 leader values as acceptable. Level-3 is still commented out, but could be uncommented for libraries that allow it.
+ -Includes version 1.14 of MARC::Lint::CodeData.
 
 Version 1.11: Updated June 5, 2006. Released June 6, 2006.
 

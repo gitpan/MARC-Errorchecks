@@ -1,5 +1,17 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.12: Updated July 5-Nov. 17, 2006. Released Feb. 25, 2007.
+
+ -Updated check_bk008_vs_300($record) to look for extra p. or v. after parenthetical qualifier.
+ -Updated check_bk008_vs_300($record) to look for missing period after 'col' in subfield 'b'.
+ -Replaced $field-tag() with $tag in error message reporting in check_nonpunctendingfields($record).
+ -Turned off 50-field limit check in check_fieldlength($record).
+ -Updated parse008vs300b($illcodes, $field300subb) to look for /map[ \,s]/ rather than just 'map' when 008 is coded 'b'.
+ -Updated check_bk008_vs_bibrefandindex($record) to look for spacing on each side of parenthetical pagination.
+ -Updated check_internal_spaces($record) to report 10 characters on either side of each set of multiple internal spaces.
+ -Uncommented level-5 and level-7 leader values as acceptable. Level-3 is still commented out, but could be uncommented for libraries that allow it.
+ -Includes version 1.14 of MARC::Lint::CodeData.
+
 Version 1.11: Updated June 5, 2006. Released June 6, 2006.
 
  -Implemented check_006($record) to validate 006 (currently only does length check).

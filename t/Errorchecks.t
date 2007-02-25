@@ -12,7 +12,7 @@ Devise checks for each subroutine individually.
 =cut
 
 use strict;
-use Test::More tests=>42;
+use Test::More tests=>45;
 
 BEGIN { use_ok( 'MARC::File::USMARC' ); }
 BEGIN { use_ok( 'MARC::Errorchecks' ); }
@@ -117,7 +117,7 @@ FROM_TEXT: {
 		#ending punctuation in 300
 		[300, "","",
 			a => "39 p",
-			b => "ill. ;",
+			b => "ill. (some col), map. ;",
 			c => "39 c",
 		],
 		#490 with 1st ind. '1' but no 830, 4xx vs. 300 punctuation
@@ -131,9 +131,12 @@ FROM_TEXT: {
 		[504, "","",
 			a => "Includes bibliographical references (44).",
 		],
+		[504, "","",
+			a => "Includes bibliographical references(p. 44) and index.",
+		],
 		#floating hyphens, ending punctuation
 		[505, "0","",
-			a => "Test 1 -- Test 2 - Test 3 -- Test 4-- testing -- Test 5",
+			a => "Test 1 --  Test 2 - Test 3 -- Test 4-- testing --  Test 5",
 		],
 		[500, "", "",
 			a => "This has a floating period .",
@@ -178,11 +181,12 @@ FROM_TEXT: {
 			a => "MARC formats",
 		],
 	);
-	is( $nfields, 33, "All the fields added OK" );
+	is( $nfields, 34, "All the fields added OK" );
 
 	my @expected = (
 		q{040: Subfield starts with a space.},
-		q{245: has multiple internal spaces.},
+		q{245: has multiple internal spaces (Test  record fro).},
+		q{505: has multiple internal spaces (Test 1 --  Test 2 - T_testing --  Test 5).},
 		q{040: has trailing spaces.},
 		q{245: has trailing spaces.},
 		q{250: has multiple consecutive periods that do not appear to be ellipses.},
@@ -198,7 +202,8 @@ FROM_TEXT: {
 		q{300: Check subfield _a for p. or v.},
 		q{300: Check subfield _c for cm., mm. or in.},
 		#reporting in check_bk008_vs_300 may change in future version.
-		q{008: Bytes 18-21 do not have code 'a' but 300 subfield 'b' has 'ill.'	300: bytes 18-21 have code 'b' but 300 subfield b is ill. ;},
+		q{300: Check subfield _b for missing period after col.},
+		q{008: Bytes 18-21 do not have code 'a' but 300 subfield 'b' has 'ill.'	300: bytes 18-21 have code 'b' but 300 subfield b is ill. (some col), map. ;},
 		q{490: Indicator is 1 but 8xx does not exist.},
 		q{240: Is present but 1xx does not exist.},
 		q{245: Indicator is 1 but 1xx does not exist.},
@@ -206,12 +211,13 @@ FROM_TEXT: {
 		q{008: Index is coded 0 but 500 or 504 mentions index.},
 		q{008: Not coded 'b' but 504 (or 500) mentions 'bibliographical references'.},
 		q{504: Pagination may need 'p.' (Includes bibliographical references (44).).},
+		q{504: Check spacing around parentheses (Includes bibliographical references(p. 44) and index.).},
 #improve error message in check_041vs008lang
 		q{041: First code (spa) does not match 008 bytes 35-37 (Language end).},
 		q{500: Check ending punctuation (exclamation point or question mark should not be followed by period), This ends  ___ k-period?.},
 		q{504: Check ending punctuation, Includes i ___ udes index},
 		q{505: Check ending punctuation (exclamation point or question mark should not be followed by period), This ends  ___ t period!.},
-		q{505: May have a floating hyphen,  -- Test 2 - Test 3 -- },
+		q{505: May have a floating hyphen, --  Test 2 - Test 3 -- },
 		q{500: May have floating period (This has a floating period .).},
 		q{500: May have floating comma (This has a floating comma , that should not be there.).},
 		q{500: May have floating question mark (Why does this field have a floating question mark ?).},
