@@ -12,7 +12,7 @@ require Exporter;
 @ISA = qw(Exporter);
 # Items to export into callers namespace by default. @EXPORT = qw();
 
-$VERSION = 1.12;
+$VERSION = 1.13;
 
 =head1 NAME
 
@@ -2109,7 +2109,7 @@ yields: 'Increase in encoding level'
 
 =head2 TO DO (ldrvalidate)
 
-Customize (comment or uncomment) bytes according to local needs.
+Customize (comment or uncomment) bytes according to local needs. Perhaps allow %ldrbytes to be passed into ldrvalidate($record) so that that hash may be created by a calling program, rather than relying on the preset MARC 21 values. This would facilitate adding valid OCLC-MARC bytes such as byte 17--I, K, M, etc.
 
 Examine other Lintadditions/Errorchecks subroutines using the leader to see if duplicate checks are being done.
 
@@ -2125,7 +2125,6 @@ Consider whether %ldrbytes needs full text of meaning of each byte.
 
 #source: MARC field list (http://www.loc.gov/marc/bibliographic/ecbdlist.htm)
 
-#Current version of the hash below reflects settings for one institution
 #Change (comment or uncomment) according to local needs
 
 my %ldrbytes = (
@@ -2133,7 +2132,7 @@ my %ldrbytes = (
     '05valid' => {
         'a' => 'Increase in encoding level',
         'c' => 'Corrected or revised',
-#        'd' => 'Deleted',
+        'd' => 'Deleted',
         'n' => 'New',
         'p' => 'Increase in encoding level from prepublication'
     },
@@ -2160,9 +2159,9 @@ my %ldrbytes = (
     '07' => 'Bibliographic level',
     '07valid' => {
         'a' => 'Monographic component part',
-#        'b' => 'Serial component part',
-#        'c' => 'Collection',
-#        'd' => 'Subunit',
+        'b' => 'Serial component part',
+        'c' => 'Collection',
+        'd' => 'Subunit',
         'i' => 'Integrating resource',
         'm' => 'Monograph/item',
         's' => 'Serial'
@@ -2172,22 +2171,22 @@ my %ldrbytes = (
         ' ' => 'Full level',
         '1' => 'Full level, material not examined',
         '2' => 'Less-than-full level, material not examined',
-#        '3' => 'Abbreviated level',
+        '3' => 'Abbreviated level',
         '4' => 'Core level',
         '5' => 'Partial (preliminary) level',
         '7' => 'Minimal level',
         '8' => 'Prepublication level',
-#        'u' => 'Unknown',
-#        'z' => 'Not applicable'
+        'u' => 'Unknown',
+        'z' => 'Not applicable'
     },
     '18' => 'Descriptive cataloging form',
     '18valid' => {
-#        ' ' => 'Non-ISBD',
+        ' ' => 'Non-ISBD',
         'a' => 'AACR 2',
-#        'i' => 'ISBD',
+        'i' => 'ISBD',
 #        'p' => 'Partial ISBD (BK) [OBSOLETE]',
 #        'r' => 'Provisional (VM MP MU) [OBSOLETE]',
-#        'u' => 'Unknown'
+        'u' => 'Unknown'
     }
 ); # %ldrbytes
 ################################
@@ -3844,6 +3843,12 @@ sub _get_current_date {
 
 =head1 CHANGES/VERSION HISTORY
 
+Version 1.13: Updated Aug. 26, 2007. Released Oct. 3, 2007.
+
+ -Uncommented valid MARC 21 leader values in %ldrbytes to remove local practice. Libraries wishing to restrict leader values should comment out individual bytes to enable errors when an unwanted value is encountered.
+ -Added ldrvalidate.t.pl and ldrvalidate.t tests.
+ -Includes version 1.18 of MARC::Lint::CodeData.
+
 Version 1.12: Updated July 5-Nov. 17, 2006. Released Feb. 25, 2007.
 
  -Updated check_bk008_vs_300($record) to look for extra p. or v. after parenthetical qualifier.
@@ -4038,7 +4043,7 @@ employers of the various contributors to the code.
 Bryan Baldus
 eijabb@cpan.org
 
-Copyright (c) 2003-2006
+Copyright (c) 2003-2007
 
 =cut
 

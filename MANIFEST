@@ -23,3 +23,5 @@ t/check_010.t
 t/check_010.t.pl
 t/Errorchecks.t
 t/Errorchecks.t.pl
+t/ldrvalidate.t
+t/ldrvalidate.t.pl

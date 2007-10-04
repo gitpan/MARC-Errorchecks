@@ -90,23 +90,23 @@ foreach my $lccn (@lccns) {
             c => "Bryan Baldus ... [et al.].",
         ],
     );
-is( $nfields, 4, "All the fields added OK" );
+    is( $nfields, 4, "All the fields added OK" );
 
 
-my @errorstoreturn = ();
-push @errorstoreturn, (@{MARC::Errorchecks::check_010($marc)});
-if (@errorstoreturn) {
-    print "Errors for LCCN(",  $lccn, ")\n";
-} #if errors
-else {
-    print "No errors for LCCN(",  $lccn, ")\n";
-} #else no errors
-while ( @errorstoreturn ) {
-    my $expected = shift @expected;
-    my $actual = shift @errorstoreturn;
-#$expected .= $lccn;
-    is( $actual, $expected, "Checking expected messages: $expected" );
-}
+    my @errorstoreturn = ();
+    push @errorstoreturn, (@{MARC::Errorchecks::check_010($marc)});
+    if (@errorstoreturn) {
+        print "Errors for LCCN(",  $lccn, ")\n";
+    } #if errors
+    else {
+        print "No errors for LCCN(",  $lccn, ")\n";
+    } #else no errors
+    while ( @errorstoreturn ) {
+        my $expected = shift @expected;
+        my $actual = shift @errorstoreturn;
+        #$expected .= $lccn;
+        is( $actual, $expected, "Checking expected messages: $expected" );
+    } #while errorstoreturn
 
 } #foreach lccn
 

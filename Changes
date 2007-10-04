@@ -1,5 +1,11 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.13: Updated Aug. 26, 2007. Released Oct. 3, 2007.
+
+ -Uncommented valid MARC 21 leader values in %ldrbytes to remove local practice. Libraries wishing to restrict leader values should comment out individual bytes to enable errors when an unwanted value is encountered.
+ -Added ldrvalidate.t.pl and ldrvalidate.t tests.
+ -Includes version 1.18 of MARC::Lint::CodeData.
+
 Version 1.12: Updated July 5-Nov. 17, 2006. Released Feb. 25, 2007.
 
  -Updated check_bk008_vs_300($record) to look for extra p. or v. after parenthetical qualifier.
