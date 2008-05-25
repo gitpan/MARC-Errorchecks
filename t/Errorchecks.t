@@ -48,6 +48,7 @@ FROM_FILE: {
 
 =cut #from file
 
+
 FROM_TEXT: {
 	my $marc = MARC::Record->new();
 	isa_ok( $marc, 'MARC::Record', 'MARC record' );
@@ -60,7 +61,7 @@ FROM_TEXT: {
 		#bad 008 for check_008 and matchpubdates
 		['008', "741452s20041   wisb          800 0 end p"
 		],
-		#lccn with extra space at end (and greater than current year) and an extra space at beginning
+		#lccn with extra space at end and an extra space at beginning
 		['010', "", "",
 			a => '   2008001001 ',
 		],
@@ -197,7 +198,8 @@ FROM_TEXT: {
 		q{008: Bytes 35-37, Language (end) not valid.},
 		q{008: Byte 39, Cataloging source has bad characters (p).},
 		q{008: Byte 29, Books-Conference publication has bad characters (8).},
-		q{010: First digits of LCCN are 2008.},
+		q{010: Subfield 'a' has improper spacing (   2008001001 ).},
+#		q{010: First digits of LCCN are 2008.},
 		q{300: 4xx exists but 300 does not end with period.},
 		q{300: Check subfield _a for p. or v.},
 		q{300: Check subfield _c for cm., mm. or in.},

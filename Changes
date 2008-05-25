@@ -1,5 +1,13 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.14: Updated Oct. 21, 2007, Jan. 21, 2008, May 20, 2008. Released May 25, 2008.
+
+ -Updated %ldrbytes with leader/19 per Update no. 8, Oct. 2007. Check for validity of leader/19 not yet implemented.
+ -Updated _check_book_bytes with code '2' ('Offprints') for 008/24-27, per Update no. 8, Oct. 2007.
+ -Updated check_245ind1vs1xx($record) with TODO item and comments
+ -Updated check_bk008_vs_300($record) to allow "leaves of plates" (as opposed to "leaves", when no p. or v. is present), "leaf", and "column"(s).
+ -Updated test in Errorchecks.t to remove check for LCCN starting with year greater than the current year. This was at 2008, which is no longer later. A test may be implemented in the future that will be less likely to break with the passage of time.
+
 Version 1.13: Updated Aug. 26, 2007. Released Oct. 3, 2007.
 
  -Uncommented valid MARC 21 leader values in %ldrbytes to remove local practice. Libraries wishing to restrict leader values should comment out individual bytes to enable errors when an unwanted value is encountered.

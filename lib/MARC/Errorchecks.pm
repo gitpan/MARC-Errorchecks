@@ -12,7 +12,7 @@ require Exporter;
 @ISA = qw(Exporter);
 # Items to export into callers namespace by default. @EXPORT = qw();
 
-$VERSION = 1.13;
+$VERSION = 1.14;
 
 =head1 NAME
 
@@ -745,7 +745,7 @@ Subfield 'a' and 'c' wording checks ('p.' or 'v.'; 'cm.', 'in.', 'mm.') only loo
 
 Take care of case of 008 coded for serials/continuing resources.
 
-Find exceptions to $a having 'p.' or 'v.' for books.
+Find exceptions to $a having 'p.' or 'v.' (and leaves, columns) for books.
 
 Find exceptions to $c having 'cm.', 'mm.', or 'in.' preceded by digits.
 
@@ -811,10 +811,12 @@ sub check_bk008_vs_300 {
             #Check for 'p.' or 'v.' or leaves in subfield 'a' unless electronic resource
             if ($subfielda) {
                 unless (($record->subfield('245', 'h')) && ($record->subfield('245', 'h') =~ /\[electronic resource\]/)) {
-                    #error if no 'p.', 'v.', or 'leaves' (alone) found
+                    #error if no 'p.', 'v.', 'column', 'leaf', or 'leaves' found
                     push @warningstoreturn, ("300: Check subfield _a for p. or v.") unless (
                        ($subfielda =~  /\(?.*\b[pv]\.[,\) ]?/) ||
-                       ($subfielda =~ / leaves / && ($subfielda !~ / leaves of plates/))
+                       ($subfielda =~  /\(?.*\bcolumns?\)?/) ||
+                       ($subfielda =~ / leaves /) ||
+                       ($subfielda =~ / leaf /)
                     );
                     #error if 'p.' found after parenthetical qualifier on 'v.'
                     if (($subfielda =~  /\(((?:unpaged)|(?:various pagings))\) p\.?\b/)) {
@@ -1115,6 +1117,10 @@ If 1xx does not exist then 245 1st indicator should be '0'.
 
 However, exceptions to this rule are possible, so this should be considered an optional error.
 
+=head2 TODO (check_245ind1vs1xx($record))
+
+Provide some way to easily turn off reporting of "245: Indicator is 0 but 1xx exists." errors. In some cases, catalogers may choose to code a 245 with 1st indicator 0 if they do not wish that 245 to be indexed. There is not likely a way to programmatically determine this choice by the cataloger, so in situations where catalogers are likely to choose not to index a 245, this error should be supressed.
+
 =cut
 
 sub check_245ind1vs1xx {
@@ -1127,11 +1133,12 @@ sub check_245ind1vs1xx {
     #report error if 245 1st ind is 1 but 1xx does not exist
     if (($record->field(245)->indicator(1) eq '1')) {
         push @warningstoreturn, ("245: Indicator is 1 but 1xx does not exist.") unless ($record->field('1..'));
-    }
+    } #if 245 1st ind. is 1
     #report error if 245 1st ind is 0 but 1xx exists
     elsif (($record->field(245)->indicator(1) eq '0')) {
+        #comment out the line below if your records have unindexed 245s by cataloger's choice
         push @warningstoreturn, ("245: Indicator is 0 but 1xx exists.") if ($record->field('1..'));
-    }
+    } #elsif 245 1st ind. is 0
 
     return \@warningstoreturn;
 
@@ -2187,6 +2194,13 @@ my %ldrbytes = (
 #        'p' => 'Partial ISBD (BK) [OBSOLETE]',
 #        'r' => 'Provisional (VM MP MU) [OBSOLETE]',
         'u' => 'Unknown'
+    },
+    '19' => 'Multipart resource record level',
+    '19valid' => {
+        ' ' => 'Not specified or not applicable',
+        'a' => 'Set',
+        'b' => 'Part with independent title',
+        'c' => 'Part with dependent title'
     }
 ); # %ldrbytes
 ################################
@@ -3315,7 +3329,7 @@ sub _check_book_bytes {
 
         # Nature of contents (byte[24/7]-[27/10])
         $bytehash{bkcontents} = substr($material_specific_bytes, 6, 4);
-        unless ($bytehash{bkcontents} =~ /^[abcdefgijklmnopqrstuvwz|\s]{4}$/) {
+        unless ($bytehash{bkcontents} =~ /^[abcdefgijklmnopqrstuvwz2|\s]{4}$/) {
             push @warningstoreturn, ("008: Bytes 24-27 (006/07-10), Books-Contents has bad characters ($bytehash{bkcontents}).")
         } #Books 24-27
 
@@ -3842,6 +3856,13 @@ sub _get_current_date {
 #########################################
 
 =head1 CHANGES/VERSION HISTORY
+
+Version 1.14: Updated Oct. 21, 2007, Jan. 21, 2008, May 20, 2008. Released May 25, 2008.
+
+ -Updated %ldrbytes with leader/19 per Update no. 8, Oct. 2007. Check for validity of leader/19 not yet implemented.
+ -Updated _check_book_bytes with code '2' ('Offprints') for 008/24-27, per Update no. 8, Oct. 2007.
+ -Updated check_245ind1vs1xx($record) with TODO item and comments
+ -Updated check_bk008_vs_300($record) to allow "leaves of plates" (as opposed to "leaves", when no p. or v. is present), "leaf", and "column"(s).
 
 Version 1.13: Updated Aug. 26, 2007. Released Oct. 3, 2007.
 
