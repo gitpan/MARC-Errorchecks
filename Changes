@@ -1,5 +1,9 @@
 Revision history for Perl extension MARC::Errorchecks.
 
+Version 1.18: Updated Oct. 8, 2012 to June 22, 2013. Released , 2013.
+
+ -Updated _check_music_bytes for MARC Update 16 (Sept. 2012), adding 'l' as valid for 008/20.
+
 Version 1.17: Updated Oct. 8, 2012 to June 22, 2013. Released June 23, 2013.
 
  -Updated check_490vs8xx($record) to look only for 800, 810, 811, 830 rather than any 8XX.

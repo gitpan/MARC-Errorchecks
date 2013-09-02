@@ -12,7 +12,7 @@ require Exporter;
 @ISA = qw(Exporter);
 # Items to export into callers namespace by default. @EXPORT = qw();
 
-$VERSION = 1.17;
+$VERSION = 1.18;
 
 =head1 NAME
 
@@ -3856,7 +3856,7 @@ sub _check_music_bytes {
 
         #Format of music (byte[20/3])
         $bytehash{fmtofmusic} = substr($material_specific_bytes, 2, 1);
-        unless ($bytehash{fmtofmusic} =~ /^[abcdeghijkmnuz|]$/) {
+        unless ($bytehash{fmtofmusic} =~ /^[abcdeghijklmnuz|]$/) {
             push @warningstoreturn, ("008: Byte 20 (006/03), Music-Format of music has bad characters ($bytehash{fmtofmusic}).");
         } #Music 20
 
@@ -4118,6 +4118,10 @@ sub _get_current_date {
 #########################################
 
 =head1 CHANGES/VERSION HISTORY
+
+Version 1.18: Updated Oct. 8, 2012 to June 22, 2013. Released , 2013.
+
+ -Updated _check_music_bytes for MARC Update 16 (Sept. 2012), adding 'l' as valid for 008/20.
 
 Version 1.17: Updated Oct. 8, 2012 to June 22, 2013. Released June 23, 2013.
 
